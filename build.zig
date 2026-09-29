@@ -41,6 +41,8 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "k4o", .module = k4o_dep.module("k4o") },
             .{ .name = "oliver", .module = oliver_dep.module("oliver") },
+            .{ .name = "build_options", .module = build_options_mod },
+            .{ .name = "main", .module = cli_mod },
         },
     });
     const tests = b.addTest(.{

@@ -5,6 +5,8 @@
 //!     dogbed --version
 //!
 //! Pipeline: Knap template + JSON data --k4o--> Textile --oliver--> HTML.
+//! By default the output is a bare HTML fragment; --title or --css wraps it
+//! in a minimal document shell.
 //!
 //! Exit codes: 0 = success, 1 = any error. On error the message goes to
 //! stderr and stdout stays empty — rendering is buffered, so partially
@@ -22,6 +24,8 @@ const usage_text =
     \\
     \\Usage:
     \\  dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
+    \\  dogbed --help
+    \\  dogbed --version
     \\
     \\Options:
     \\  --data, -d <file>   JSON object with the template variables
@@ -29,11 +33,21 @@ const usage_text =
     \\                      so: cat data.json | dogbed render -t t.knap -d -
     \\                      The --data=<file> form is also accepted.
     \\  --profile, -p <p>   oliver output profile: html (default) or xhtml.
+    \\  --title <text>      Wrap the fragment in a minimal HTML document
+    \\                      shell and set <title> (HTML-escaped). With
+    \\                      xhtml, the shell is XHTML 1.0 Strict.
+    \\  --css <href>        Add <link rel="stylesheet" href="..."> to the
+    \\                      shell. Repeatable; links keep flag order. The
+    \\                      href passes through verbatim (unvalidated).
+    \\                      Either --title or --css switches output from a
+    \\                      bare fragment to a full document.
     \\  --max-output, -m <bytes>
-    \\                      Ceiling on the k4o render, in bytes. Nested
-    \\                      loops multiply, so a small template over modest
-    \\                      data can ask for far more than you expect.
-    \\                      Default 268435456 (256 MiB); 0 means no limit.
+    \\                      Ceiling on the emitted document in bytes, shell
+    \\                      included (it also bounds the intermediate Textile
+    \\                      render). Nested loops multiply, so a small
+    \\                      template over modest data can ask for far more
+    \\                      than you expect. Default 268435456 (256 MiB);
+    \\                      0 means no limit.
     \\  --help, -h          Show this help.
     \\  --version, -v       Show the version.
     \\
@@ -70,6 +84,9 @@ pub fn main(init: std.process.Init) !u8 {
     var data_path: ?[]const u8 = null;
     var profile: oliver.OutputProfile = .html;
     var max_output: usize = kt.default_max_output;
+    var title: ?[]const u8 = null;
+    var css = std.ArrayList([]const u8).empty;
+    defer css.deinit(init.gpa);
     var i: usize = 1;
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
@@ -107,6 +124,26 @@ pub fn main(init: std.process.Init) !u8 {
             const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
             if (value.len == 0) return usage(init, "missing value for --max-output");
             max_output = parseSize(value) catch return usage(init, "invalid value for --max-output");
+        } else if (std.mem.eql(u8, arg, "--title")) {
+            i += 1;
+            if (i >= args.items.len) return usage(init, "missing value for --title");
+            if (title != null) return usage(init, "duplicate --title");
+            if (args.items[i].len == 0) return usage(init, "missing value for --title");
+            title = args.items[i];
+        } else if (std.mem.startsWith(u8, arg, "--title=")) {
+            const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
+            if (value.len == 0) return usage(init, "missing value for --title");
+            if (title != null) return usage(init, "duplicate --title");
+            title = value;
+        } else if (std.mem.eql(u8, arg, "--css")) {
+            i += 1;
+            if (i >= args.items.len) return usage(init, "missing value for --css");
+            if (args.items[i].len == 0) return usage(init, "missing value for --css");
+            try css.append(init.gpa, args.items[i]);
+        } else if (std.mem.startsWith(u8, arg, "--css=")) {
+            const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
+            if (value.len == 0) return usage(init, "missing value for --css");
+            try css.append(init.gpa, value);
         } else if (arg.len > 1 and arg[0] == '-') {
             return usage(init, "unknown option");
         } else {
@@ -173,11 +210,29 @@ pub fn main(init: std.process.Init) !u8 {
         return 1;
     };
 
+    // Optional document shell: --title/--css wrap the fragment; without
+    // either flag the fragment is emitted byte-identical to a bare oliver
+    // render.
+    var final: []const u8 = html_buf.written();
+    if (title != null or css.items.len > 0) {
+        // Writer errors on an allocating buffer are allocation failures.
+        final = wrapDocument(arena, final, title, css.items, profile) catch {
+            report("out of memory", .{});
+            return 1;
+        };
+    }
+
+    // The cap covers the final document, shell included.
+    if (max_output != 0 and final.len > max_output) {
+        report("output ({d} bytes) exceeds --max-output ({d})", .{ final.len, max_output });
+        return 1;
+    }
+
     // Buffered render complete: emit in one write so that an error never
     // produces half-rendered output.
     var out_buf: [8192]u8 = undefined;
     var w = std.Io.File.stdout().writer(init.io, &out_buf);
-    w.interface.writeAll(html_buf.written()) catch return 1;
+    w.interface.writeAll(final) catch return 1;
     w.flush() catch return 1;
     return 0;
 }
@@ -232,6 +287,59 @@ fn parseSize(text: []const u8) error{Invalid}!usize {
     const n = std.fmt.parseInt(u64, digits, 10) catch return error.Invalid;
     const scaled = std.math.mul(u64, n, scale) catch return error.Invalid;
     return std.math.cast(usize, scaled) orelse error.Invalid;
+}
+
+/// Wraps a rendered HTML fragment in a minimal document shell. The `title`
+/// is HTML-escaped; the `css` hrefs pass through verbatim (they may be URLs
+/// or relative paths — validating them is the consumer's problem). With no
+/// title and no links the fragment is returned untouched, so the no-flag
+/// output stays byte-identical to a bare fragment.
+pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
+    if (title == null and css.len == 0) return fragment;
+
+    var buf = std.Io.Writer.Allocating.init(alloc);
+    const w = &buf.writer;
+    switch (profile) {
+        .html => {
+            try w.writeAll(
+                \\<!DOCTYPE html>
+                \\<html>
+                \\<head>
+                \\<meta charset="utf-8">
+                \\
+            );
+            if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
+            for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\">\n", .{href});
+        },
+        .xhtml => {
+            try w.writeAll("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
+            if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
+            for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\" />\n", .{href});
+        },
+        // The CLI only exposes html and xhtml; html4_strict was declined
+        // upstream (see SPEC) and cannot reach the shell.
+        .html4_strict => unreachable,
+    }
+    try w.writeAll("</head>\n<body>\n");
+    try w.writeAll(fragment);
+    if (fragment.len == 0 or fragment[fragment.len - 1] != '\n') try w.writeByte('\n');
+    try w.writeAll("</body>\n</html>\n");
+    return buf.written();
+}
+
+/// Escapes `& < > "` for HTML text content and attribute values.
+pub fn escapeHtml(alloc: std.mem.Allocator, text: []const u8) std.Io.Writer.Error![]const u8 {
+    var buf = std.Io.Writer.Allocating.init(alloc);
+    for (text) |c| {
+        switch (c) {
+            '&' => try buf.writer.writeAll("&amp;"),
+            '<' => try buf.writer.writeAll("&lt;"),
+            '>' => try buf.writer.writeAll("&gt;"),
+            '"' => try buf.writer.writeAll("&quot;"),
+            else => try buf.writer.writeByte(c),
+        }
+    }
+    return buf.written();
 }
 
 fn printStdout(init: std.process.Init, text: []const u8) !void {

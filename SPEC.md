@@ -4,7 +4,9 @@
 
 A document compiler. It reads a Knap template plus data (a JSON object, from
 a file or stdin), renders the template to Textile with k4o, renders the
-Textile to HTML with oliver, and writes the finished document to stdout.
+Textile to HTML with oliver, and writes the result to stdout. By default
+that is a bare HTML fragment; `--title`/`--css` finish it into a document
+(see the CLI contract).
 
 ```
 template.knap + data.json --k4o--> Textile --oliver--> HTML
@@ -33,6 +35,8 @@ button, kill it.
   is about *templated* documents).
 - HTML4 Strict output (declined upstream; the bar is a named consumer).
 - Any CMS feature, ever (see above).
+- Template versioning, remote templates, template discovery paths — the
+  starter library is three embedded templates, done.
 
 ## The workflow hole it fills
 
@@ -47,16 +51,24 @@ The recurring job: structured findings in, consistent document out.
 ## CLI contract
 
 - `dogbed render <template.knap> [--data <file>] [--profile html|xhtml]
-  [--max-output <bytes>]`
+  [--title <text>] [--css <href>] [--max-output <bytes>]`
 - `--data -` reads the JSON object from stdin:
   `cat findings.json | dogbed render verdict.knap -d - > verdict.html`
+- Output is a bare HTML fragment unless `--title` or `--css` is passed.
+  Either flag wraps the fragment in a minimal shell: HTML5 normally, XHTML
+  1.0 Strict under `--profile xhtml`. The title is HTML-escaped; the css
+  hrefs pass through verbatim (URL or relative path — the consumer's
+  problem, not ours). No flags means byte-identical fragment output.
+- `--max-output` caps the final document in bytes, shell included (it also
+  bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
+  multiply, so the default is generous but finite.
+- `dogbed template <name>` prints an embedded starter template to stdout so
+  the user copies it and owns it. The library is exactly three starters
+  (verdict, release-notes, reading-note) with matching example data —
+  no discovery paths, no versioning, no fetching.
 - Errors go to stderr, stdout stays empty, exit 1. A failed render never
   emits a half-rendered document.
-- `--max-output` caps the k4o stage (default 256 MiB, `0` = unlimited);
-  nested loops multiply, so the default is generous but finite.
 
 ## Open questions
 
 - Whether Knap stays the template language long-term or was the bootstrap.
-- Whether the filing workflow wants a small template library shipped
-  alongside the binary (verdict.knap, release-notes.knap, ...).

@@ -17,6 +17,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Embedded starter templates printed by `dogbed template <name>`.
+    const templates_mod = b.createModule(.{
+        .root_source_file = b.path("share/templates.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -25,6 +32,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "k4o", .module = k4o_dep.module("k4o") },
             .{ .name = "oliver", .module = oliver_dep.module("oliver") },
             .{ .name = "build_options", .module = build_options_mod },
+            .{ .name = "templates", .module = templates_mod },
         },
     });
 
@@ -41,6 +49,9 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "k4o", .module = k4o_dep.module("k4o") },
             .{ .name = "oliver", .module = oliver_dep.module("oliver") },
+            .{ .name = "build_options", .module = build_options_mod },
+            .{ .name = "templates", .module = templates_mod },
+            .{ .name = "main", .module = cli_mod },
         },
     });
     const tests = b.addTest(.{

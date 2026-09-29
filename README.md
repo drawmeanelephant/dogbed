@@ -27,6 +27,8 @@ dogbed --version
 
 On any error the message goes to stderr, stdout stays empty, exit code is 1.
 
+See [examples/](examples/) for a self-demonstrating verdict template.
+
 ## Building
 
 Zig 0.16.0. `zig build` produces `zig-out/bin/dogbed`; `zig build test`

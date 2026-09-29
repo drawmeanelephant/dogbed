@@ -35,6 +35,8 @@ button, kill it.
   is about *templated* documents).
 - HTML4 Strict output (declined upstream; the bar is a named consumer).
 - Any CMS feature, ever (see above).
+- Template versioning, remote templates, template discovery paths — the
+  starter library is three embedded templates, done.
 
 ## The workflow hole it fills
 
@@ -60,11 +62,13 @@ The recurring job: structured findings in, consistent document out.
 - `--max-output` caps the final document in bytes, shell included (it also
   bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
   multiply, so the default is generous but finite.
+- `dogbed template <name>` prints an embedded starter template to stdout so
+  the user copies it and owns it. The library is exactly three starters
+  (verdict, release-notes, reading-note) with matching example data —
+  no discovery paths, no versioning, no fetching.
 - Errors go to stderr, stdout stays empty, exit 1. A failed render never
   emits a half-rendered document.
 
 ## Open questions
 
 - Whether Knap stays the template language long-term or was the bootstrap.
-- Whether the filing workflow wants a small template library shipped
-  alongside the binary (verdict.knap, release-notes.knap, ...).

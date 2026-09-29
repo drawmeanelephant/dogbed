@@ -4,6 +4,7 @@
 const std = @import("std");
 const kt = @import("k4o");
 const oliver = @import("oliver");
+const templates = @import("templates");
 const cli = @import("main");
 
 test "pipeline: knap template renders through textile to html" {
@@ -128,4 +129,32 @@ test "shell: fragment without a trailing newline still lands on its own body lin
 
     const out = try cli.wrapDocument(alloc, "<p>hi</p>", "T", &.{}, .html);
     try std.testing.expect(std.mem.indexOf(u8, out, "<p>hi</p>\n</body>") != null);
+}
+
+test "templates: names are unique" {
+    for (templates.entries, 0..) |a, i| {
+        for (templates.entries[i + 1 ..]) |b| {
+            try std.testing.expect(!std.mem.eql(u8, a.name, b.name));
+        }
+    }
+}
+
+test "templates: every starter renders through the full pipeline with its example data" {
+    for (templates.entries) |entry| {
+        var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+        defer arena_state.deinit();
+        const alloc = arena_state.allocator();
+
+        const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, entry.example_data, .{});
+        var d = kt.Diagnostic{};
+        const textile = try kt.render(alloc, entry.template, parsed, &d);
+        try std.testing.expect(textile.len > 0);
+
+        var result = try oliver.parse(alloc, textile, .textile, .{});
+        defer result.deinit();
+        var html_buf = std.Io.Writer.Allocating.init(alloc);
+        try oliver.html.render(alloc, &html_buf.writer, &result.document, .{});
+        const html = html_buf.written();
+        try std.testing.expect(std.mem.indexOf(u8, html, "<h1") != null);
+    }
 }

@@ -1,6 +1,7 @@
 //! dogbed CLI — a document compiler, not a CMS.
 //!
 //!     dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml] [--max-output <bytes>]
+//!     dogbed template <name>
 //!     dogbed --help
 //!     dogbed --version
 //!
@@ -15,6 +16,7 @@
 const std = @import("std");
 const kt = @import("k4o");
 const oliver = @import("oliver");
+const templates = @import("templates");
 const build_options = @import("build_options");
 
 const max_input = 16 * 1024 * 1024;
@@ -24,10 +26,18 @@ const usage_text =
     \\
     \\Usage:
     \\  dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
+    \\  dogbed template <name>
     \\  dogbed --help
     \\  dogbed --version
     \\
-    \\Options:
+    \\Commands:
+    \\  render              Render a Knap template (with JSON data) to HTML.
+    \\  template <name>     Print an embedded starter template to stdout, so
+    \\                      you copy it and own it. `dogbed template --list`
+    \\                      shows the names: verdict, release-notes,
+    \\                      reading-note.
+    \\
+    \\Render options:
     \\  --data, -d <file>   JSON object with the template variables
     \\                      (optional; defaults to {}). Use - for stdin,
     \\                      so: cat data.json | dogbed render -t t.knap -d -
@@ -77,7 +87,10 @@ pub fn main(init: std.process.Init) !u8 {
         try printStdout(init, text);
         return 0;
     }
-    if (!std.mem.eql(u8, first, "render")) return usage(init, "unknown command");
+    if (!std.mem.eql(u8, first, "render")) {
+        if (std.mem.eql(u8, first, "template")) return templateCmd(init, args.items[1..]);
+        return usage(init, "unknown command");
+    }
     if (args.items.len == 1) return usage(init, "missing template file");
 
     var template_path: ?[]const u8 = null;
@@ -237,6 +250,42 @@ pub fn main(init: std.process.Init) !u8 {
     return 0;
 }
 
+fn templateCmd(init: std.process.Init, rest: []const []const u8) !u8 {
+    const arena = init.arena.allocator();
+
+    if (rest.len == 0) return listTemplates(init);
+    if (rest.len > 1) return usage(init, "expected one template name (try `dogbed template --list`)");
+    const name = rest[0];
+    if (std.mem.eql(u8, name, "--list") or std.mem.eql(u8, name, "list")) return listTemplates(init);
+    if (std.mem.eql(u8, name, "--help") or std.mem.eql(u8, name, "-h")) {
+        try printStdout(init, usage_text);
+        return 0;
+    }
+    for (templates.entries) |entry| {
+        if (std.mem.eql(u8, entry.name, name)) {
+            try printStdout(init, entry.template);
+            return 0;
+        }
+    }
+    var names = std.ArrayList(u8).empty;
+    for (templates.entries, 0..) |entry, i| {
+        if (i > 0) try names.appendSlice(arena, ", ");
+        try names.appendSlice(arena, entry.name);
+    }
+    report("unknown template '{s}' (available: {s})", .{ name, names.items });
+    return 1;
+}
+
+fn listTemplates(init: std.process.Init) !u8 {
+    var names_buf: [4096]u8 = undefined;
+    var w = std.Io.File.stdout().writer(init.io, &names_buf);
+    for (templates.entries) |entry| {
+        w.interface.print("{s}\t{s}\n", .{ entry.name, entry.description }) catch return 1;
+    }
+    w.flush() catch return 1;
+    return 0;
+}
+
 fn readStdin(init: std.process.Init, arena: std.mem.Allocator) ![]u8 {
     var input = std.ArrayList(u8).empty;
     defer input.deinit(arena);
@@ -352,7 +401,7 @@ fn printStdout(init: std.process.Init, text: []const u8) !void {
 fn usage(init: std.process.Init, msg: []const u8) u8 {
     _ = init;
     report("{s}", .{msg});
-    report("usage: dogbed render <template.knap> [--data <data.json>]  (see --help)", .{});
+    report("usage: dogbed render <template.knap> [...] | dogbed template <name>  (see --help)", .{});
     return 1;
 }
 

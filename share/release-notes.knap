@@ -1,0 +1,30 @@
+{# release-notes.knap — starter template, printed by `dogbed template release-notes`.
+   Data: title, version, date, highlights[], breaking[], added[], changed[],
+   fixed[], changelog_url. Every section is optional and disappears when its
+   data is missing or empty; see release-notes.json. #}{{ title | h1 }}
+{% if date %}{{ version }} — {{ date }}{% else %}{{ version }}{% endif %}
+{% if highlights %}
+{{ "Highlights" | h2 }}
+
+{{ highlights | list }}
+{% endif %}{% if breaking %}
+{{ "Breaking changes" | h2 }}
+
+{{ breaking | list }}
+{% endif %}{% if added %}
+{{ "Added" | h2 }}
+
+{{ added | list }}
+{% endif %}{% if changed %}
+{{ "Changed" | h2 }}
+
+{{ changed | list }}
+{% endif %}{% if fixed %}
+{{ "Fixed" | h2 }}
+
+{{ fixed | list }}
+{% endif %}{% if changelog_url %}
+{{ "Changelog" | h2 }}
+
+{{ "Full changelog" | link:changelog_url }}
+{% endif %}

@@ -1,0 +1,11 @@
+{
+  "title": "dogbed 0.2.0",
+  "version": "0.2.0",
+  "date": "2026-09-29",
+  "highlights": ["an optional HTML document shell (title and stylesheet flags)"],
+  "breaking": [],
+  "added": ["dogbed template <name> prints an embedded starter template"],
+  "changed": ["the output cap now covers the final document, shell included"],
+  "fixed": [],
+  "changelog_url": "https://github.com/drawmeanelephant/dogbed/releases"
+}

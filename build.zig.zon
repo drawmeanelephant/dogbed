@@ -18,6 +18,7 @@
         "build.zig",
         "build.zig.zon",
         "src",
+        "share",
         "tests.zig",
         "README.md",
         "SPEC.md",

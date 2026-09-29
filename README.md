@@ -16,6 +16,7 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 ```
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
               [--title <text>] [--css <href>] [--max-output <bytes>]
+dogbed template <name>
 dogbed --help
 dogbed --version
 ```
@@ -40,7 +41,22 @@ a minimal HTML shell, nothing more.
 
 On any error the message goes to stderr, stdout stays empty, exit code is 1.
 
-See [examples/](examples/) for a self-demonstrating verdict template.
+## Starter templates
+
+Three starters ship inside the binary — no fetching, no discovery paths.
+`dogbed template <name>` prints one to stdout so you copy it and own it;
+`dogbed template --list` shows the names. Each has matching example data in
+[share/](share/):
+
+- `verdict` — PR review verdict: blockers, nits, summary.
+- `release-notes` — highlights, breaking changes, added/changed/fixed;
+  empty sections disappear.
+- `reading-note` — author, rating, quote, notes.
+
+```
+dogbed template verdict > my-verdict.knap
+cat findings.json | dogbed render my-verdict.knap -d - --title "Review" > review.html
+```
 
 ## Building
 

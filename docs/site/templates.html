@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>dogbed — starter templates</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>Starter templates</h1>
+<p>Three starters ship inside the binary — no fetching, no discovery paths. <code>dogbed template &lt;name&gt;</code> prints one to stdout so you copy it and own it. <code>--list</code> (or a bare <code>dogbed template</code>) shows the names:</p>
+<pre><code>$ dogbed template --list
+verdict	PR review verdict: blockers, nits, summary.
+release-notes	Release notes: highlights, breaking, added, changed, fixed.
+reading-note	Reading note: author, rating, quote, notes.
+</code></pre>
+<h2>The three starters</h2>
+<p><code>verdict</code> — a PR review verdict: blockers, nits, summary. Example data in <code>share/verdict.json</code>.</p>
+<p><code>release-notes</code> — release notes: highlights, breaking changes, added, changed, fixed, a changelog link. Every section is guarded with <code>{% if %}</code> — empty data makes the section disappear.</p>
+<p><code>reading-note</code> — a reading note: author, source link, rating, quote, notes. Everything but the title is optional.</p>
+<h2>The round trip</h2>
+<p>The whole round trip — print a starter, render it with the document shell:</p>
+<pre><code>$ dogbed template release-notes &gt; release-notes.knap
+$ dogbed render release-notes.knap -d share/release-notes.json --title 'dogbed 0.2.0' --css style.css
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;title&gt;dogbed 0.2.0&lt;/title&gt;
+&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;dogbed 0.2.0&lt;/h1&gt;
+&lt;p&gt;0.2.0 — 2026-09-29&lt;/p&gt;
+&lt;h2&gt;Highlights&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;an optional HTML document shell (title and stylesheet flags)&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Added&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;dogbed template &amp;lt;name&amp;gt; prints an embedded starter template&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Changed&lt;/h2&gt;
+&lt;ul&gt;
+&lt;li&gt;the output cap now covers the final document, shell included&lt;/li&gt;
+&lt;/ul&gt;
+&lt;h2&gt;Changelog&lt;/h2&gt;
+&lt;p&gt;&lt;a href=&quot;https://github.com/drawmeanelephant/dogbed/releases&quot;&gt;Full changelog&lt;/a&gt;&lt;/p&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>One thing to know before filling in your own data: Textile converts <code>--</code> in values to an em-dash — see the <a href="shell.html">document shell page</a> for the details and the <code>…</code> workaround.</p>
+<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a></p>
+</body>
+</html>

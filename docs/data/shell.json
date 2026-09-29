@@ -1,0 +1,22 @@
+{
+  "title": "The document shell",
+  "intro_p": "By default @render@ emits a bare HTML fragment — ready to pipe into something bigger. Passing @--title@ or @--css@ switches the output to a finished document: the same fragment wrapped in a minimal HTML shell. With no flags the fragment is byte-identical to what oliver rendered alone.",
+  "fragment_p": "A bare fragment — no shell flags:",
+  "fragment_tr": "$ dogbed render share/verdict.knap -d share/verdict.json\n<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n",
+  "title_p": "@--title@ wraps the fragment in the shell and sets @<title>@. The text is HTML-escaped for @&@, @<@, @>@ and @\"@ — the data is untrusted:",
+  "title_tr": "$ dogbed render share/verdict.knap -d share/verdict.json --title 'Art & \"Code\" <review>' | grep '<title>'\n<title>Art &amp; &quot;Code&quot; &lt;review&gt;</title>\n",
+  "css_p": "@--css@ adds a stylesheet link to the shell. Repeatable — links keep flag order — and the href passes through verbatim: URL or relative path, unvalidated. The consumer owns it.",
+  "document_p": "The whole deal — one command, one finished document:",
+  "document_tr": "$ dogbed render share/verdict.knap -d share/verdict.json --title 'Verdict — dogbed' --css style.css\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>Verdict — dogbed</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n</body>\n</html>\n",
+  "xhtml_p": "@--profile xhtml@ swaps the HTML5 shell for XHTML 1.0 Strict: strict doctype, an http-equiv meta instead of @<meta charset>@ (which is invalid XHTML), self-closing @<link … />@ tags, and @xmlns@ on the root element.",
+  "xhtml_tr": "$ dogbed render share/verdict.knap -d share/verdict.json -p xhtml --title 'Verdict' --css style.css\n<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n<title>Verdict</title>\n<link rel=\"stylesheet\" href=\"style.css\" />\n</head>\n<body>\n<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n</body>\n</html>\n",
+  "cap_p": "@--max-output@ caps the final document — shell included. The k4o stage is bounded by the same value, so a runaway template dies early:",
+  "cap_tr": "$ dogbed render share/verdict.knap -d share/verdict.json --title T --css style.css --max-output 250\ndogbed: output (297 bytes) exceeds --max-output (250)\n",
+  "gotcha1_p": "Dogfood finding: Textile typography eats @--@ in data. A JSON value containing @--title@ renders as @—title@ — the value flows through the Textile intermediate, and Textile converts @--@ to an em-dash. Surprising for CLI flags and technical content; plan around it:",
+  "gotcha1_tr": "$ echo '{\"flag\":\"--title\"}' | dogbed render flag.knap -d -\n<p>—title</p>\n",
+  "gotcha2_p": "Dogfood finding: backticks are not code spans. Markdown habits produce literal backticks — Textile code spans are @…@:",
+  "gotcha2_tr": "$ echo '{\"t\":\"try `backticks` for code\"}' | dogbed render note.knap -d -\n<p>try `backticks` for code</p>\n",
+  "fix_p": "The fix: wrap flags in @…@ spans — the code span protects the dashes:",
+  "fix_tr": "$ echo '{\"t\":\"wrap flags in @--title@ and Textile leaves them alone\"}' | dogbed render note.knap -d -\n<p>wrap flags in <code>--title</code> and Textile leaves them alone</p>\n",
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+}

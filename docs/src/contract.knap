@@ -1,0 +1,15 @@
+{# contract.knap — data: title, intro_p, contract[], nongoals[], closing, nav #}{{ title | h1 }}
+
+{{ intro_p }}
+
+{{ "CLI contract" | h2 }}
+
+{{ contract | list }}
+
+{{ "Non-goals" | h2 }}
+
+{{ nongoals | list }}
+
+{{ closing | blockquote }}
+
+{{ nav }}

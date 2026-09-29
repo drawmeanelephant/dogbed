@@ -1,0 +1,51 @@
+{# shell.knap — data: title, intro_p, fragment_p, fragment_tr, title_p,
+   title_tr, css_p, document_p, document_tr, xhtml_p, xhtml_tr, cap_p,
+   cap_tr, gotcha1_p, gotcha1_tr, gotcha2_p, gotcha2_tr, fix_p, fix_tr, nav #}{{ title | h1 }}
+
+{{ intro_p }}
+
+{{ fragment_p }}
+
+{{ fragment_tr | codeblock }}
+
+{{ "@--title@" | h2 }}
+
+{{ title_p }}
+
+{{ title_tr | codeblock }}
+
+{{ "@--css@" | h2 }}
+
+{{ css_p }}
+
+{{ document_p }}
+
+{{ document_tr | codeblock }}
+
+{{ "@--profile xhtml@" | h2 }}
+
+{{ xhtml_p }}
+
+{{ xhtml_tr | codeblock }}
+
+{{ "@--max-output@" | h2 }}
+
+{{ cap_p }}
+
+{{ cap_tr | codeblock }}
+
+{{ "Data gotchas (dogfood)" | h2 }}
+
+{{ gotcha1_p }}
+
+{{ gotcha1_tr | codeblock }}
+
+{{ gotcha2_p }}
+
+{{ gotcha2_tr | codeblock }}
+
+{{ fix_p }}
+
+{{ fix_tr | codeblock }}
+
+{{ nav }}

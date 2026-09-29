@@ -1,0 +1,20 @@
+{
+  "title": "The CLI contract",
+  "intro_p": "This page is the SPEC, rendered by the tool the SPEC specifies. Transcribed from @SPEC.md@ at docs-build time — the spec documents itself.",
+  "contract": [
+    "@dogbed render <template.knap> [--data <file>] [--profile html|xhtml] [--title <text>] [--css <href>] [--max-output <bytes>]@",
+    "@--data -@ reads the JSON object from stdin: @cat findings.json | dogbed render verdict.knap -d - > verdict.html@",
+    "Output is a bare HTML fragment unless @--title@ or @--css@ is passed. Either flag wraps the fragment in a minimal shell: HTML5 normally, XHTML 1.0 Strict under @--profile xhtml@. The title is HTML-escaped; the css hrefs pass through verbatim — URL or relative path, the consumer problem, not ours. No flags means byte-identical fragment output.",
+    "@--max-output@ caps the final document in bytes, shell included (it also bounds the k4o stage; default 256 MiB, @0@ = unlimited). Nested loops multiply, so the default is generous but finite.",
+    "@dogbed template <name>@ prints an embedded starter template to stdout so the user copies it and owns it. The library is exactly three starters — verdict, release-notes, reading-note — with matching example data. No discovery paths, no versioning, no fetching.",
+    "Errors go to stderr, stdout stays empty, exit 1. A failed render never emits a half-rendered document."
+  ],
+  "nongoals": [
+    "Markdown input to the pipeline (oliver already does that alone; dogbed is about *templated* documents).",
+    "HTML4 Strict output (declined upstream; the bar is a named consumer).",
+    "Any CMS feature, ever.",
+    "Template versioning, remote templates, template discovery paths — the starter library is three embedded templates, done."
+  ],
+  "closing": "It is a compiler: deterministic, pipeable, boring in the good way. If it ever grows an edit button, kill it.",
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+}

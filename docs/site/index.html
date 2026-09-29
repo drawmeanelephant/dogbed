@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>dogbed — a document compiler</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>dogbed — a document compiler</h1>
+<p>dogbed is a document compiler, not a CMS: a Knap template plus a JSON object goes in, an HTML document comes out. One static binary, no runtime, no JavaScript, no database, no edit button. k4o does the templating, oliver does the rendering, dogbed joins the halves.</p>
+<h2>The pipeline</h2>
+<pre><code>template.knap + data.json --k4o--&gt; Textile --oliver--&gt; HTML
+</code></pre>
+<h2>Install</h2>
+<p>Grab a static binary from the <a href="https://github.com/drawmeanelephant/dogbed/releases">releases page</a>, or build from source — Zig 0.16.0 and <code>zig build</code> gives you <code>zig-out/bin/dogbed</code>.</p>
+<h2>Quickstart</h2>
+<p>Print the verdict starter and keep it — you own it now. Blank lines are shown as ··· — the codeblock filter cannot hold empty lines (fourth finding on the <a href="dogfood.html">dogfood page</a>):</p>
+<pre><code>{{ title | h1 }}
+···
+{{ verdict | bold }} — {{ summary }}
+···
+{{ &quot;Blockers&quot; | h2 }}
+···
+{{ blockers | list }}
+···
+{{ &quot;Nits&quot; | h2 }}
+···
+{{ nits | numbered }}
+</code></pre>
+<p>Feed it data. This is the starter example:</p>
+<pre><code>{&quot;blockers&quot;:[],&quot;nits&quot;:[&quot;ship it&quot;],&quot;summary&quot;:&quot;the pipeline sings&quot;,&quot;title&quot;:&quot;dogbed 0.1.0 — first verdict&quot;,&quot;verdict&quot;:&quot;approve&quot;}
+</code></pre>
+<p>Render:</p>
+<pre><code>&lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the pipeline sings&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;ship it&lt;/li&gt;
+&lt;/ol&gt;
+</code></pre>
+<p>That block is the entire output — a bare HTML fragment, ready to pipe into something bigger. Add <code>--title</code> or <code>--css</code> and dogbed finishes the document for you. Keep reading: the <a href="shell.html">document shell</a>, the <a href="templates.html">starter templates</a>, the <a href="contract.html">CLI contract</a>, and the <a href="dogfood.html">dogfood story</a>.</p>
+<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a></p>
+</body>
+</html>

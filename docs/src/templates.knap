@@ -1,0 +1,24 @@
+{# templates.knap — data: title, intro_p, list_tr, verdict_p, rn_p, note_p,
+   round_p, round_tr, gotcha_p, nav #}{{ title | h1 }}
+
+{{ intro_p }}
+
+{{ list_tr | codeblock }}
+
+{{ "The three starters" | h2 }}
+
+{{ verdict_p }}
+
+{{ rn_p }}
+
+{{ note_p }}
+
+{{ "The round trip" | h2 }}
+
+{{ round_p }}
+
+{{ round_tr | codeblock }}
+
+{{ gotcha_p }}
+
+{{ nav }}

@@ -6,7 +6,7 @@
 
 {{ how_p }}
 
-{{ "The PR #3 verdict" | h2 }}
+{{ "PR #3, graded by its own tool" | h2 }}
 
 {{ verdict_p }}
 

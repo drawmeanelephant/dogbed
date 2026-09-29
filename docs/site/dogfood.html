@@ -9,8 +9,8 @@
 <h1>Dogfood: the tool builds its own docs</h1>
 <p>These docs were built by the tool they document. Five Knap templates plus five JSON data files, rendered by <code>dogbed render</code> with <code>--title</code> and <code>--css</code> into static HTML by <code>docs/build.sh</code>. No site generator, no JavaScript — the docs build is as dumb as the tool.</p>
 <p>The rule on this site: every output block is real. Each one was produced by running the command shown with the <code>dogbed</code> binary on <code>main</code>, and the captured bytes were embedded into the page data with <code>jq</code> — nothing hand-typed, nothing invented.</p>
-<h2>The PR #3 verdict</h2>
-<p>The quality story, told with an artifact: the review verdict for PR #3 — the PR that added the document shell and the starter library, reviewed with the tool it touches. First, print the starter: <code>dogbed template verdict &gt; pr3.knap</code>. The data is the review itself:</p>
+<h2>PR #3, graded by its own tool</h2>
+<p>The quality story, told with an artifact: the authoring agent reviewed its own PR #3 — the one that added the document shell and the starter library — with the tool it touches, and rendered the verdict through that tool. The owner review said approve and merge with the 8/8 smoke scenarios green; what follows is the tool grading its own homework. First, print the starter: <code>dogbed template verdict &gt; pr3.knap</code>. The data is that self-review:</p>
 <pre><code>{&quot;blockers&quot;:[],&quot;nits&quot;:[&quot;xmlns on the xhtml root element goes one line past the issue text — good call anyway&quot;,&quot;sample data avoids -- because Textile renders it as an em-dash&quot;,&quot;--max-output now covers the final document; README wording updated to match&quot;],&quot;summary&quot;:&quot;the shell stays a dumb string wrap, the library stays three starters; ship it&quot;,&quot;title&quot;:&quot;PR #3 — document shell + starter library&quot;,&quot;verdict&quot;:&quot;approve&quot;}
 </code></pre>
 <p>Render: <code>dogbed render pr3.knap -d pr3.json</code> —</p>

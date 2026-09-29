@@ -1,0 +1,11 @@
+{{ title | h1 }}
+
+{{ verdict | bold }} — {{ summary }}
+
+{{ "Blockers" | h2 }}
+
+{{ blockers | list }}
+
+{{ "Nits" | h2 }}
+
+{{ nits | numbered }}

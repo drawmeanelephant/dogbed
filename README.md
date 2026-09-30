@@ -1,5 +1,9 @@
 # dogbed
 
+<p align="center">
+  <img src="docs/assets/oliver-og.png" alt="The dogbed social card: oliver — a cartoon Weimaraner in an orange HTML5 cape, with the words 'dogbed: the dog builds its own docs'." width="640">
+</p>
+
 A document compiler, not a CMS. Knap templates in, HTML documents out.
 
 ```

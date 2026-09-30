@@ -21,7 +21,7 @@ body > p:first-of-type img {
   margin: 0 auto 1.25rem;
 }
 p:last-of-type img {
-  height: 44px;
+  height: 76px;
   width: auto;
   vertical-align: middle;
   margin-left: 0.4rem;

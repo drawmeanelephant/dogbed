@@ -16,5 +16,5 @@
   "find4_p": "Fourth, found while building this very site: the @codeblock@ filter emits a single Textile @bc.@ block, and a Textile block ends at the first empty line — so a value containing blank lines splits, and everything after the gap becomes ordinary paragraphs. There is no extended block form to fall back on. That is why the quickstart on the index page shows the starter template with its blank lines drawn as ··· — an honest marker, because the block cannot hold them.",
   "find4_tr": "$ echo '{\"src\":\"line one\\n\\nline two\"}' | dogbed render block.knap -d -\n<pre><code>line one\n</code></pre>\n<p>line two</p>\n",
   "close_p": "That is the dogfood deal: the tool built its own reality, and the rough edges are documented, not hidden.",
-  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html · \"deploy\":deploy.html"
 }

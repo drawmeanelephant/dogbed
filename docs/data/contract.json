@@ -16,5 +16,5 @@
     "Template versioning, remote templates, template discovery paths — the starter library is three embedded templates, done."
   ],
   "closing": "It is a compiler: deterministic, pipeable, boring in the good way. If it ever grows an edit button, kill it.",
-  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html · \"deploy\":deploy.html"
 }

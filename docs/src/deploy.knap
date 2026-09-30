@@ -1,0 +1,41 @@
+{# deploy.knap — data: title, intro_p, loop_p, loop_tr, gate_p, fail_tr,
+   setup_p, secrets_tr, workflow_p, workflow_tr, rollback_p, rollback_steps,
+   rollback_cmd, first_p, nav #}{{ title | h1 }}
+
+{{ intro_p }}
+
+{{ "The loop" | h2 }}
+
+{{ loop_p }}
+
+{{ loop_tr | codeblock }}
+
+{{ "The reproducibility gate" | h2 }}
+
+{{ gate_p }}
+
+{{ fail_tr | codeblock }}
+
+{{ "The Cloudflare setup" | h2 }}
+
+{{ setup_p }}
+
+{{ secrets_tr | codeblock }}
+
+{{ workflow_p }}
+
+{{ workflow_tr | codeblock }}
+
+{{ "Rollback" | h2 }}
+
+{{ rollback_p }}
+
+{{ rollback_steps | numbered }}
+
+{{ rollback_cmd | codeblock }}
+
+{{ "The first deploy" | h2 }}
+
+{{ first_p }}
+
+{{ nav }}

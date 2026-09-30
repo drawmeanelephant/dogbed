@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>dogbed — the publishing pipeline</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>The publishing pipeline</h1>
+<p>This page is part of the site it describes. The docs deploy to Cloudflare Pages, and this page documents the pipeline that ships them: edit Knap and JSON, rebuild with the tool, prove the committed output is current, merge, and Pages takes it from there. The tool documents its own deployment.</p>
+<h2>The loop</h2>
+<p>The whole loop: edit <code>docs/src/*.knap</code> or <code>docs/data/*.json</code>, rebuild the site, prove the committed output is current, ship it through a PR. On merge, the deploy workflow pushes <code>docs/site/</code> to Cloudflare Pages:</p>
+<pre><code>$ sh docs/build.sh
+rendered: index shell templates contract dogfood deploy
+$ git diff --exit-code docs/site/ &amp;&amp; echo clean
+clean
+</code></pre>
+<h2>The reproducibility gate</h2>
+<p>The gate is the <code>docs-repro</code> job in <code>.github/workflows/ci.yml</code>: it builds the dogbed binary, runs <code>sh docs/build.sh</code>, and fails with <code>git diff --exit-code docs/site/</code> if anything differs. A red build means exactly one thing — you forgot to rebuild the site before committing. Watch it fail on a stale tree:</p>
+<pre><code>$ echo stale &gt;&gt; docs/site/index.html
+$ git diff --exit-code docs/site/
+diff --git a/docs/site/index.html b/docs/site/index.html
+index 3de7d22..65b7de6 100644
+--- a/docs/site/index.html
++++ b/docs/site/index.html
+@@ -43,3 +43,4 @@
+ &lt;p&gt;&lt;a href=&quot;index.html&quot;&gt;index&lt;/a&gt; · &lt;a href=&quot;shell.html&quot;&gt;shell&lt;/a&gt; · &lt;a href=&quot;templates.html&quot;&gt;templates&lt;/a&gt; · &lt;a href=&quot;contract.html&quot;&gt;contract&lt;/a&gt; · &lt;a href=&quot;dogfood.html&quot;&gt;dogfood&lt;/a&gt; · &lt;a href=&quot;deploy.html&quot;&gt;deploy&lt;/a&gt;&lt;/p&gt;
+ &lt;/body&gt;
+ &lt;/html&gt;
++stale
+$ echo &quot;exit: $?&quot;
+exit: 1
+</code></pre>
+<h2>The Cloudflare setup</h2>
+<p>The Cloudflare setup, as inspected: the project is <code>dogbed</code> — live at <a href="https://dogbed.filed.fyi">dogbed.filed.fyi</a> and on the default <a href="https://dogbed.pages.dev">dogbed.pages.dev</a> domain. The output directory is <code>docs/site/</code>, committed to the repo — the deploy ships the exact bytes in the tree, no build step on the Pages side. The deploy path is wrangler direct upload from GitHub Actions: the repo carries the two secrets below, and no Cloudflare GitHub App checks appear on commits, so the Pages integration path is not in play.</p>
+<pre><code>$ gh secret list --repo drawmeanelephant/dogbed
+CLOUDFLARE_ACCOUNT_ID	2026-09-30T00:10:25Z
+CLOUDFLARE_API_TOKEN	2026-09-30T00:10:33Z
+</code></pre>
+<p>The deploy workflow is checkout and deploy, nothing else:</p>
+<pre><code>$ cat .github/workflows/deploy.yml
+name: deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  pages-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy docs/site to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy docs/site --project-name=dogbed
+</code></pre>
+<h2>Rollback</h2>
+<p>Cloudflare keeps every deployment. To roll back:</p>
+<ol>
+<li>open the Cloudflare dashboard, Workers &amp; Pages, project <code>dogbed</code></li>
+<li>open Deployments — every push to <code>main</code> is listed with its commit</li>
+<li>pick the last good deployment and choose Rollback to this deployment</li>
+</ol>
+<pre><code>$ npx wrangler pages deployment rollback &lt;deployment-id&gt; --project-name=dogbed
+</code></pre>
+<h2>The first deploy</h2>
+<p>The deploy workflow triggers on push to <code>main</code> and nothing else — the ruleset blocks direct pushes, so the first deploy fires on the merge of the very PR that adds it. The trimmed log of that first real run belongs on this page once it exists; until then this page states its absence instead of inventing one.</p>
+<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a> · <a href="deploy.html">deploy</a></p>
+</body>
+</html>

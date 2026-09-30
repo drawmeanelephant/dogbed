@@ -1,0 +1,21 @@
+{
+  "title": "The publishing pipeline",
+  "intro_p": "This page is part of the site it describes. The docs deploy to Cloudflare Pages, and this page documents the pipeline that ships them: edit Knap and JSON, rebuild with the tool, prove the committed output is current, merge, and Pages takes it from there. The tool documents its own deployment.",
+  "loop_p": "The whole loop: edit @docs/src/*.knap@ or @docs/data/*.json@, rebuild the site, prove the committed output is current, ship it through a PR. On merge, the deploy workflow pushes @docs/site/@ to Cloudflare Pages:",
+  "loop_tr": "$ sh docs/build.sh\nrendered: index shell templates contract dogfood deploy\n$ git diff --exit-code docs/site/ && echo clean\nclean\n",
+  "gate_p": "The gate is the @docs-repro@ job in @.github/workflows/ci.yml@: it builds the dogbed binary, runs @sh docs/build.sh@, and fails with @git diff --exit-code docs/site/@ if anything differs. A red build means exactly one thing — you forgot to rebuild the site before committing. Watch it fail on a stale tree:",
+  "fail_tr": "$ echo stale >> docs/site/index.html\n$ git diff --exit-code docs/site/\ndiff --git a/docs/site/index.html b/docs/site/index.html\nindex 3de7d22..65b7de6 100644\n--- a/docs/site/index.html\n+++ b/docs/site/index.html\n@@ -43,3 +43,4 @@\n <p><a href=\"index.html\">index</a> · <a href=\"shell.html\">shell</a> · <a href=\"templates.html\">templates</a> · <a href=\"contract.html\">contract</a> · <a href=\"dogfood.html\">dogfood</a> · <a href=\"deploy.html\">deploy</a></p>\n </body>\n </html>\n+stale\n$ echo \"exit: $?\"\nexit: 1\n",
+  "setup_p": "The Cloudflare setup, as inspected: the project is @dogbed@ — live at \"dogbed.filed.fyi\":https://dogbed.filed.fyi and on the default \"dogbed.pages.dev\":https://dogbed.pages.dev domain. The output directory is @docs/site/@, committed to the repo — the deploy ships the exact bytes in the tree, no build step on the Pages side. The deploy path is wrangler direct upload from GitHub Actions: the repo carries the two secrets below, and no Cloudflare GitHub App checks appear on commits, so the Pages integration path is not in play.",
+  "secrets_tr": "$ gh secret list --repo drawmeanelephant/dogbed\nCLOUDFLARE_ACCOUNT_ID\t2026-09-30T00:10:25Z\nCLOUDFLARE_API_TOKEN\t2026-09-30T00:10:33Z\n",
+  "workflow_p": "The deploy workflow is checkout and deploy, nothing else:",
+  "workflow_tr": "$ cat .github/workflows/deploy.yml\nname: deploy\non:\n  push:\n    branches: [main]\njobs:\n  pages-deploy:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - name: Deploy docs/site to Cloudflare Pages\n        uses: cloudflare/wrangler-action@v3\n        with:\n          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}\n          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}\n          command: pages deploy docs/site --project-name=dogbed\n",
+  "rollback_p": "Cloudflare keeps every deployment. To roll back:",
+  "rollback_steps": [
+    "open the Cloudflare dashboard, Workers & Pages, project @dogbed@",
+    "open Deployments — every push to @main@ is listed with its commit",
+    "pick the last good deployment and choose Rollback to this deployment"
+  ],
+  "rollback_cmd": "$ npx wrangler pages deployment rollback <deployment-id> --project-name=dogbed",
+  "first_p": "The deploy workflow triggers on push to @main@ and nothing else — the ruleset blocks direct pushes, so the first deploy fires on the merge of the very PR that adds it. The trimmed log of that first real run belongs on this page once it exists; until then this page states its absence instead of inventing one.",
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html · \"deploy\":deploy.html"
+}

@@ -6,17 +6,18 @@ set -eu
 cd "$(dirname "$0")/.."
 : "${DOGBED:=zig-out/bin/dogbed}"
 
-for page in index shell templates contract dogfood; do
+for page in index shell templates contract dogfood deploy; do
     case "$page" in
         index)     t="dogbed — a document compiler" ;;
         shell)     t="dogbed — the document shell" ;;
         templates) t="dogbed — starter templates" ;;
         contract)  t="dogbed — the CLI contract" ;;
         dogfood)   t="dogbed — dogfood" ;;
+        deploy)    t="dogbed — the publishing pipeline" ;;
     esac
     "$DOGBED" render "docs/src/$page.knap" \
         -d "docs/data/$page.json" \
         --title "$t" --css style.css \
         > "docs/site/$page.html"
 done
-echo "rendered: index shell templates contract dogfood"
+echo "rendered: index shell templates contract dogfood deploy"

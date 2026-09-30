@@ -51,6 +51,10 @@ const usage_text =
     \\                      href passes through verbatim (unvalidated).
     \\                      Either --title or --css switches output from a
     \\                      bare fragment to a full document.
+    \\  --head <html>       Splice one verbatim line into the shell's
+    \\                      <head> (meta tags, favicon links). Repeatable,
+    \\                      kept in order; the markup passes through
+    \\                      unvalidated — escape your own attributes.
     \\  --max-output, -m <bytes>
     \\                      Ceiling on the emitted document in bytes, shell
     \\                      included (it also bounds the intermediate Textile
@@ -100,6 +104,8 @@ pub fn main(init: std.process.Init) !u8 {
     var title: ?[]const u8 = null;
     var css = std.ArrayList([]const u8).empty;
     defer css.deinit(init.gpa);
+    var head = std.ArrayList([]const u8).empty;
+    defer head.deinit(init.gpa);
     var i: usize = 1;
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
@@ -157,6 +163,15 @@ pub fn main(init: std.process.Init) !u8 {
             const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
             if (value.len == 0) return usage(init, "missing value for --css");
             try css.append(init.gpa, value);
+        } else if (std.mem.eql(u8, arg, "--head")) {
+            i += 1;
+            if (i >= args.items.len) return usage(init, "missing value for --head");
+            if (args.items[i].len == 0) return usage(init, "missing value for --head");
+            try head.append(init.gpa, args.items[i]);
+        } else if (std.mem.startsWith(u8, arg, "--head=")) {
+            const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
+            if (value.len == 0) return usage(init, "missing value for --head");
+            try head.append(init.gpa, value);
         } else if (arg.len > 1 and arg[0] == '-') {
             return usage(init, "unknown option");
         } else {
@@ -223,13 +238,13 @@ pub fn main(init: std.process.Init) !u8 {
         return 1;
     };
 
-    // Optional document shell: --title/--css wrap the fragment; without
-    // either flag the fragment is emitted byte-identical to a bare oliver
-    // render.
+    // Optional document shell: --title/--css/--head wrap the fragment;
+    // without any of them the fragment is emitted byte-identical to a bare
+    // oliver render.
     var final: []const u8 = html_buf.written();
-    if (title != null or css.items.len > 0) {
+    if (title != null or css.items.len > 0 or head.items.len > 0) {
         // Writer errors on an allocating buffer are allocation failures.
-        final = wrapDocument(arena, final, title, css.items, profile) catch {
+        final = wrapDocument(arena, final, title, css.items, head.items, profile) catch {
             report("out of memory", .{});
             return 1;
         };
@@ -339,12 +354,13 @@ fn parseSize(text: []const u8) error{Invalid}!usize {
 }
 
 /// Wraps a rendered HTML fragment in a minimal document shell. The `title`
-/// is HTML-escaped; the `css` hrefs pass through verbatim (they may be URLs
-/// or relative paths — validating them is the consumer's problem). With no
-/// title and no links the fragment is returned untouched, so the no-flag
-/// output stays byte-identical to a bare fragment.
-pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
-    if (title == null and css.len == 0) return fragment;
+/// is HTML-escaped; the `css` hrefs and the `head` lines pass through
+/// verbatim (they may be URLs, paths, or raw markup — validating them is
+/// the consumer's problem). With no title, no links, and no head lines the
+/// fragment is returned untouched, so the no-flag output stays
+/// byte-identical to a bare fragment.
+pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
+    if (title == null and css.len == 0 and head.len == 0) return fragment;
 
     var buf = std.Io.Writer.Allocating.init(alloc);
     const w = &buf.writer;
@@ -359,11 +375,13 @@ pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]co
             );
             if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
             for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\">\n", .{href});
+            for (head) |line| try w.print("{s}\n", .{line});
         },
         .xhtml => {
             try w.writeAll("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
             if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
             for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\" />\n", .{href});
+            for (head) |line| try w.print("{s}\n", .{line});
         },
         // The CLI only exposes html and xhtml; html4_strict was declined
         // upstream (see SPEC) and cannot reach the shell.

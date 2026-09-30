@@ -15,7 +15,7 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 
 ```
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
-              [--title <text>] [--css <href>] [--max-output <bytes>]
+              [--title <text>] [--css <href>] [--head <html>] [--max-output <bytes>]
 dogbed template <name>
 dogbed --help
 dogbed --version
@@ -30,6 +30,8 @@ dogbed --version
 - `--css <href>` — add `<link rel="stylesheet" href="…">` to the shell.
   Repeatable; links keep flag order. The href is emitted verbatim — URL or
   relative path, unvalidated.
+- `--head <html>` — splice one verbatim line into the shell's `<head>`
+  (meta tags, favicon links). Repeatable, order kept, unvalidated.
 - `--max-output, -m` — ceiling on the emitted document in bytes, shell
   included (`k`/`m`/`g` suffixes accepted). Default 256 MiB; `0` means no
   limit.

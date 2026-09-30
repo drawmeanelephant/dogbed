@@ -65,7 +65,28 @@ jobs:
 <pre><code>$ npx wrangler pages deployment rollback &lt;deployment-id&gt; --project-name=dogbed
 </code></pre>
 <h2>The first deploy</h2>
-<p>The deploy workflow triggers on push to <code>main</code> and nothing else — the ruleset blocks direct pushes, so the first deploy fires on the merge of the very PR that adds it. The trimmed log of that first real run belongs on this page once it exists; until then this page states its absence instead of inventing one.</p>
+<p>The deploy workflow first fired on the merge of the very PR that added it — push to <code>main</code>, 28 seconds, deployed. No build step, no ceremony: checkout and wrangler. The workflow log, trimmed to the wrangler action (timestamps are the runner’s):</p>
+<pre><code>2026-09-30T00:28:04.4001917Z   command: pages deploy docs/site --project-name=dogbed
+2026-09-30T00:28:04.4906387Z [command]/usr/local/bin/npx --no-install wrangler --version
+2026-09-30T00:28:11.8067446Z [command]/usr/local/bin/npm i wrangler@3.90.0
+2026-09-30T00:28:19.0876014Z ✅ Wrangler installed
+2026-09-30T00:28:19.0896103Z [command]/usr/local/bin/npx --no-install wrangler --version
+2026-09-30T00:28:19.8311712Z 3.90.0
+2026-09-30T00:28:19.8842932Z [command]/usr/local/bin/npx wrangler pages deploy docs/site --project-name=dogbed
+2026-09-30T00:28:22.2939592Z Uploading... (0/7)
+2026-09-30T00:28:22.7886426Z Uploading... (2/7)
+2026-09-30T00:28:22.8702344Z Uploading... (5/7)
+2026-09-30T00:28:22.9625881Z Uploading... (7/7)
+2026-09-30T00:28:22.9628024Z ✨ Success! Uploaded 7 files (1.71 sec)
+2026-09-30T00:28:24.2006374Z 🌎 Deploying...
+2026-09-30T00:28:25.4739626Z ✨ Deployment complete! Take a peek over at https://a505925f.dogbed.pages.dev
+</code></pre>
+<p>And both domains answered the moment it landed:</p>
+<pre><code>$ curl -s -o /dev/null -w &quot;%{http_code}&quot; https://dogbed.pages.dev/
+200
+$ curl -s -o /dev/null -w &quot;%{http_code}&quot; https://dogbed.filed.fyi/
+200
+</code></pre>
 <p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a> · <a href="deploy.html">deploy</a></p>
 </body>
 </html>

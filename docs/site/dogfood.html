@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>dogbed — dogfood</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>Dogfood: the tool builds its own docs</h1>
+<p>These docs were built by the tool they document. Five Knap templates plus five JSON data files, rendered by <code>dogbed render</code> with <code>--title</code> and <code>--css</code> into static HTML by <code>docs/build.sh</code>. No site generator, no JavaScript — the docs build is as dumb as the tool.</p>
+<p>The rule on this site: every output block is real. Each one was produced by running the command shown with the <code>dogbed</code> binary on <code>main</code>, and the captured bytes were embedded into the page data with <code>jq</code> — nothing hand-typed, nothing invented.</p>
+<h2>PR #3, graded by its own tool</h2>
+<p>The quality story, told with an artifact: the authoring agent reviewed its own PR #3 — the one that added the document shell and the starter library — with the tool it touches, and rendered the verdict through that tool. The owner review said approve and merge with the 8/8 smoke scenarios green; what follows is the tool grading its own homework. First, print the starter: <code>dogbed template verdict &gt; pr3.knap</code>. The data is that self-review:</p>
+<pre><code>{&quot;blockers&quot;:[],&quot;nits&quot;:[&quot;xmlns on the xhtml root element goes one line past the issue text — good call anyway&quot;,&quot;sample data avoids -- because Textile renders it as an em-dash&quot;,&quot;--max-output now covers the final document; README wording updated to match&quot;],&quot;summary&quot;:&quot;the shell stays a dumb string wrap, the library stays three starters; ship it&quot;,&quot;title&quot;:&quot;PR #3 — document shell + starter library&quot;,&quot;verdict&quot;:&quot;approve&quot;}
+</code></pre>
+<p>Render: <code>dogbed render pr3.knap -d pr3.json</code> —</p>
+<pre><code>&lt;h1&gt;PR #3 — document shell + starter library&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the shell stays a dumb string wrap, the library stays three starters; ship it&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;xmlns on the xhtml root element goes one line past the issue text — good call anyway&lt;/li&gt;
+&lt;li&gt;sample data avoids — because Textile renders it as an em-dash&lt;/li&gt;
+&lt;li&gt;—max-output now covers the final document; README wording updated to match&lt;/li&gt;
+&lt;/ol&gt;
+</code></pre>
+<h2>What running it surfaced</h2>
+<p>Running the real verdict through the pipeline surfaced genuine behaviors. First: Textile typography eats <code>--</code> in data — look at the nits in the output above, where <code>--</code> came back as <code>—</code>. The value flows through the Textile intermediate; Textile owns the typography:</p>
+<pre><code>$ echo '{&quot;flag&quot;:&quot;--title&quot;}' | dogbed render flag.knap -d -
+&lt;p&gt;—title&lt;/p&gt;
+</code></pre>
+<p>Second: backticks are not code spans — Textile code spans are <code>…</code>, Markdown habits produce literal backticks:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;try `backticks` for code&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;try `backticks` for code&lt;/p&gt;
+</code></pre>
+<p>The fix — wrap flags in <code>…</code> spans:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;wrap flags in @--title@ and Textile leaves them alone&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;wrap flags in &lt;code&gt;--title&lt;/code&gt; and Textile leaves them alone&lt;/p&gt;
+</code></pre>
+<p>Third: the verdict starter has no <code>{% if %}</code> guard on its sections — with an empty <code>blockers</code> array the <code>Blockers</code> heading renders with nothing under it. Look at the output above: <code>&lt;h2&gt;Blockers&lt;/h2&gt;</code>, orphaned. The newer starters guard their sections; verdict predates them. The workaround is yours: omit or accept — the starter ships as is.</p>
+<p>Fourth, found while building this very site: the <code>codeblock</code> filter emits a single Textile <code>bc.</code> block, and a Textile block ends at the first empty line — so a value containing blank lines splits, and everything after the gap becomes ordinary paragraphs. There is no extended block form to fall back on. That is why the quickstart on the index page shows the starter template with its blank lines drawn as ··· — an honest marker, because the block cannot hold them.</p>
+<pre><code>$ echo '{&quot;src&quot;:&quot;line one\n\nline two&quot;}' | dogbed render block.knap -d -
+&lt;pre&gt;&lt;code&gt;line one
+&lt;/code&gt;&lt;/pre&gt;
+&lt;p&gt;line two&lt;/p&gt;
+</code></pre>
+<p>That is the dogfood deal: the tool built its own reality, and the rough edges are documented, not hidden.</p>
+<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a></p>
+</body>
+</html>

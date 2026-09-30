@@ -1,0 +1,30 @@
+{# index.knap — data: title, intro, pipeline, install_p, qs1, qs_template,
+   qs2, qs_json, qs3, qs_render, qs4, nav #}{{ title | h1 }}
+
+{{ intro }}
+
+{{ "The pipeline" | h2 }}
+
+{{ pipeline | codeblock }}
+
+{{ "Install" | h2 }}
+
+{{ install_p }}
+
+{{ "Quickstart" | h2 }}
+
+{{ qs1 }}
+
+{{ qs_template | codeblock }}
+
+{{ qs2 }}
+
+{{ qs_json | codeblock }}
+
+{{ qs3 }}
+
+{{ qs_render | codeblock }}
+
+{{ qs4 }}
+
+{{ nav }}

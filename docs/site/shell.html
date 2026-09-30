@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>dogbed — the document shell</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<h1>The document shell</h1>
+<p>By default <code>render</code> emits a bare HTML fragment — ready to pipe into something bigger. Passing <code>--title</code> or <code>--css</code> switches the output to a finished document: the same fragment wrapped in a minimal HTML shell. With no flags the fragment is byte-identical to what oliver rendered alone.</p>
+<p>A bare fragment — no shell flags:</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json
+&lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the pipeline sings&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;ship it&lt;/li&gt;
+&lt;/ol&gt;
+</code></pre>
+<h2><code>--title</code></h2>
+<p><code>--title</code> wraps the fragment in the shell and sets <code>&lt;title&gt;</code>. The text is HTML-escaped for <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code> and <code>&quot;</code> — the data is untrusted:</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --title 'Art &amp; &quot;Code&quot; &lt;review&gt;' | grep '&lt;title&gt;'
+&lt;title&gt;Art &amp;amp; &amp;quot;Code&amp;quot; &amp;lt;review&amp;gt;&lt;/title&gt;
+</code></pre>
+<h2><code>--css</code></h2>
+<p><code>--css</code> adds a stylesheet link to the shell. Repeatable — links keep flag order — and the href passes through verbatim: URL or relative path, unvalidated. The consumer owns it.</p>
+<p>The whole deal — one command, one finished document:</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --title 'Verdict — dogbed' --css style.css
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+&lt;meta charset=&quot;utf-8&quot;&gt;
+&lt;title&gt;Verdict — dogbed&lt;/title&gt;
+&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the pipeline sings&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;ship it&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2><code>--profile xhtml</code></h2>
+<p><code>--profile xhtml</code> swaps the HTML5 shell for XHTML 1.0 Strict: strict doctype, an http-equiv meta instead of <code>&lt;meta charset&gt;</code> (which is invalid XHTML), self-closing <code>&lt;link … /&gt;</code> tags, and <code>xmlns</code> on the root element.</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json -p xhtml --title 'Verdict' --css style.css
+&lt;!DOCTYPE html PUBLIC &quot;-//W3C//DTD XHTML 1.0 Strict//EN&quot; &quot;http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd&quot;&gt;
+&lt;html xmlns=&quot;http://www.w3.org/1999/xhtml&quot;&gt;
+&lt;head&gt;
+&lt;meta http-equiv=&quot;Content-Type&quot; content=&quot;text/html; charset=utf-8&quot; /&gt;
+&lt;title&gt;Verdict&lt;/title&gt;
+&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot; /&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the pipeline sings&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;ship it&lt;/li&gt;
+&lt;/ol&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<h2><code>--max-output</code></h2>
+<p><code>--max-output</code> caps the final document — shell included. The k4o stage is bounded by the same value, so a runaway template dies early:</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --title T --css style.css --max-output 250
+dogbed: output (297 bytes) exceeds --max-output (250)
+</code></pre>
+<h2>Data gotchas (dogfood)</h2>
+<p>Dogfood finding: Textile typography eats <code>--</code> in data. A JSON value containing <code>--title</code> renders as <code>—title</code> — the value flows through the Textile intermediate, and Textile converts <code>--</code> to an em-dash. Surprising for CLI flags and technical content; plan around it:</p>
+<pre><code>$ echo '{&quot;flag&quot;:&quot;--title&quot;}' | dogbed render flag.knap -d -
+&lt;p&gt;—title&lt;/p&gt;
+</code></pre>
+<p>Dogfood finding: backticks are not code spans. Markdown habits produce literal backticks — Textile code spans are <code>…</code>:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;try `backticks` for code&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;try `backticks` for code&lt;/p&gt;
+</code></pre>
+<p>The fix: wrap flags in <code>…</code> spans — the code span protects the dashes:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;wrap flags in @--title@ and Textile leaves them alone&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;wrap flags in &lt;code&gt;--title&lt;/code&gt; and Textile leaves them alone&lt;/p&gt;
+</code></pre>
+<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a></p>
+</body>
+</html>

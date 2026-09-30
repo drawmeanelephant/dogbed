@@ -1,0 +1,12 @@
+{
+  "title": "Starter templates",
+  "intro_p": "Three starters ship inside the binary — no fetching, no discovery paths. @dogbed template <name>@ prints one to stdout so you copy it and own it. @--list@ (or a bare @dogbed template@) shows the names:",
+  "list_tr": "$ dogbed template --list\nverdict\tPR review verdict: blockers, nits, summary.\nrelease-notes\tRelease notes: highlights, breaking, added, changed, fixed.\nreading-note\tReading note: author, rating, quote, notes.\n",
+  "verdict_p": "@verdict@ — a PR review verdict: blockers, nits, summary. Example data in @share/verdict.json@.",
+  "rn_p": "@release-notes@ — release notes: highlights, breaking changes, added, changed, fixed, a changelog link. Every section is guarded with @{% if %}@ — empty data makes the section disappear.",
+  "note_p": "@reading-note@ — a reading note: author, source link, rating, quote, notes. Everything but the title is optional.",
+  "round_p": "The whole round trip — print a starter, render it with the document shell:",
+  "round_tr": "$ dogbed template release-notes > release-notes.knap\n$ dogbed render release-notes.knap -d share/release-notes.json --title 'dogbed 0.2.0' --css style.css\n<!DOCTYPE html>\n<html>\n<head>\n<meta charset=\"utf-8\">\n<title>dogbed 0.2.0</title>\n<link rel=\"stylesheet\" href=\"style.css\">\n</head>\n<body>\n<h1>dogbed 0.2.0</h1>\n<p>0.2.0 — 2026-09-29</p>\n<h2>Highlights</h2>\n<ul>\n<li>an optional HTML document shell (title and stylesheet flags)</li>\n</ul>\n<h2>Added</h2>\n<ul>\n<li>dogbed template &lt;name&gt; prints an embedded starter template</li>\n</ul>\n<h2>Changed</h2>\n<ul>\n<li>the output cap now covers the final document, shell included</li>\n</ul>\n<h2>Changelog</h2>\n<p><a href=\"https://github.com/drawmeanelephant/dogbed/releases\">Full changelog</a></p>\n</body>\n</html>\n",
+  "gotcha_p": "One thing to know before filling in your own data: Textile converts @--@ in values to an em-dash — see the \"document shell page\":shell.html for the details and the @…@ workaround.",
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+}

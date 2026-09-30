@@ -1,0 +1,41 @@
+{# dogfood.knap — data: title, intro_p, how_p, verdict_p, vjson, render_p,
+   vrender, find1_p, dash_tr, find2_p, ticks_tr, fix_p, fix_tr, find3_p,
+   find4_p, find4_tr, close_p, nav #}{{ title | h1 }}
+
+{{ intro_p }}
+
+{{ how_p }}
+
+{{ "PR #3, graded by its own tool" | h2 }}
+
+{{ verdict_p }}
+
+{{ vjson | codeblock }}
+
+{{ render_p }}
+
+{{ vrender | codeblock }}
+
+{{ "What running it surfaced" | h2 }}
+
+{{ find1_p }}
+
+{{ dash_tr | codeblock }}
+
+{{ find2_p }}
+
+{{ ticks_tr | codeblock }}
+
+{{ fix_p }}
+
+{{ fix_tr | codeblock }}
+
+{{ find3_p }}
+
+{{ find4_p }}
+
+{{ find4_tr | codeblock }}
+
+{{ close_p }}
+
+{{ nav }}

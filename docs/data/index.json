@@ -1,0 +1,14 @@
+{
+  "title": "dogbed — a document compiler",
+  "intro": "dogbed is a document compiler, not a CMS: a Knap template plus a JSON object goes in, an HTML document comes out. One static binary, no runtime, no JavaScript, no database, no edit button. k4o does the templating, oliver does the rendering, dogbed joins the halves.",
+  "pipeline": "template.knap + data.json --k4o--> Textile --oliver--> HTML",
+  "install_p": "Grab a static binary from the \"releases page\":https://github.com/drawmeanelephant/dogbed/releases, or build from source — Zig 0.16.0 and @zig build@ gives you @zig-out/bin/dogbed@.",
+  "qs1": "Print the verdict starter and keep it — you own it now. Blank lines are shown as ··· — the codeblock filter cannot hold empty lines (fourth finding on the \"dogfood page\":dogfood.html):",
+  "qs_template": "{{ title | h1 }}\n···\n{{ verdict | bold }} — {{ summary }}\n···\n{{ \"Blockers\" | h2 }}\n···\n{{ blockers | list }}\n···\n{{ \"Nits\" | h2 }}\n···\n{{ nits | numbered }}",
+  "qs2": "Feed it data. This is the starter example:",
+  "qs_json": "{\"blockers\":[],\"nits\":[\"ship it\"],\"summary\":\"the pipeline sings\",\"title\":\"dogbed 0.1.0 — first verdict\",\"verdict\":\"approve\"}",
+  "qs3": "Render:",
+  "qs_render": "<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n",
+  "qs4": "That block is the entire output — a bare HTML fragment, ready to pipe into something bigger. Add @--title@ or @--css@ and dogbed finishes the document for you. Keep reading: the \"document shell\":shell.html, the \"starter templates\":templates.html, the \"CLI contract\":contract.html, and the \"dogfood story\":dogfood.html.",
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html"
+}

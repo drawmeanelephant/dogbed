@@ -1,6 +1,6 @@
 {# deploy.knap — data: title, intro_p, loop_p, loop_tr, gate_p, fail_tr,
    setup_p, secrets_tr, workflow_p, workflow_tr, rollback_p, rollback_steps,
-   rollback_cmd, first_p, nav #}{{ title | h1 }}
+   rollback_cmd, first_p, first_tr, live_p, live_tr, nav #}{{ title | h1 }}
 
 {{ intro_p }}
 
@@ -37,5 +37,11 @@
 {{ "The first deploy" | h2 }}
 
 {{ first_p }}
+
+{{ first_tr | codeblock }}
+
+{{ live_p }}
+
+{{ live_tr | codeblock }}
 
 {{ nav }}

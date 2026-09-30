@@ -1,5 +1,7 @@
-{# index.knap — data: title, intro, pipeline, install_p, qs1, qs_template,
-   qs2, qs_json, qs3, qs_render, qs4, nav #}{{ title | h1 }}
+{# index.knap — data: dogbed_img, title, intro, pipeline, install_p, qs1, qs_template,
+   qs2, qs_json, qs3, qs_render, qs4, nav #}{{ dogbed_img }}
+
+{{ title | h1 }}
 
 {{ intro }}
 

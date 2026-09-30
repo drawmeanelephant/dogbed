@@ -10,7 +10,22 @@ body {
 }
 h1 { font-size: 1.6rem; border-bottom: 2px solid #8a6d3b; padding-bottom: 0.4rem; }
 h2 { font-size: 1.15rem; color: #d8b46a; margin-top: 1.75rem; }
-p:first-of-type { font-size: 1.1rem; }
+h1 + p { font-size: 1.1rem; }
+img { max-width: 100%; height: auto; }
+body > p:first-of-type img {
+  display: block;
+  width: min(420px, 100%);
+  aspect-ratio: 1 / 1;
+  height: auto;
+  border-radius: 10px;
+  margin: 0 auto 1.25rem;
+}
+p:last-of-type img {
+  height: 44px;
+  width: auto;
+  vertical-align: middle;
+  margin-left: 0.4rem;
+}
 a { color: #d8b46a; text-decoration-color: #8a6d3b; }
 a:hover { color: #e8c98a; }
 ul, ol { padding-left: 1.5rem; }

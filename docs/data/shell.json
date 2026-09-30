@@ -18,5 +18,5 @@
   "gotcha2_tr": "$ echo '{\"t\":\"try `backticks` for code\"}' | dogbed render note.knap -d -\n<p>try `backticks` for code</p>\n",
   "fix_p": "The fix: wrap flags in @…@ spans — the code span protects the dashes:",
   "fix_tr": "$ echo '{\"t\":\"wrap flags in @--title@ and Textile leaves them alone\"}' | dogbed render note.knap -d -\n<p>wrap flags in <code>--title</code> and Textile leaves them alone</p>\n",
-  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html · \"deploy\":deploy.html"
+  "nav": "\"index\":index.html · \"shell\":shell.html · \"templates\":templates.html · \"contract\":contract.html · \"dogfood\":dogfood.html · \"deploy\":deploy.html\n!assets/oliver-badge.webp(rendered by oliver)!"
 }

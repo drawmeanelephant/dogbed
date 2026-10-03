@@ -1,0 +1,9 @@
+{# about.knap — a page copied from layout.knap. Copy layout.knap to start
+   your own; change the words in data/about.json. #}
+{{ title | h1 }}
+
+{{ intro }}
+
+{{ body }}
+
+rendered by "dogbed":https://github.com/drawmeanelephant/dogbed — k4o templates it, oliver renders it.

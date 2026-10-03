@@ -2,12 +2,16 @@
 //!
 //!     dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml] [--max-output <bytes>]
 //!     dogbed template <name>
+//!     dogbed init
 //!     dogbed --help
 //!     dogbed --version
 //!
 //! Pipeline: Knap template + JSON data --k4o--> Textile --oliver--> HTML.
 //! By default the output is a bare HTML fragment; --title or --css wraps it
-//! in a minimal document shell.
+//! in a minimal document shell. init scaffolds a site skeleton (routes,
+//! layout, content dirs, wiring) into the current directory — strictly
+//! additive: it never overwrites an existing file, and a superseded scaffold
+//! file is archived to a timestamped dir with the location reported.
 //!
 //! Exit codes: 0 = success, 1 = any error. On error the message goes to
 //! stderr and stdout stays empty — rendering is buffered, so partially
@@ -17,6 +21,7 @@ const std = @import("std");
 const kt = @import("k4o");
 const oliver = @import("oliver");
 const templates = @import("templates");
+const scaffold = @import("scaffold");
 const build_options = @import("build_options");
 
 const max_input = 16 * 1024 * 1024;
@@ -27,6 +32,7 @@ const usage_text =
     \\Usage:
     \\  dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
     \\  dogbed template <name>
+    \\  dogbed init
     \\  dogbed --help
     \\  dogbed --version
     \\
@@ -36,6 +42,15 @@ const usage_text =
     \\                      you copy it and own it. `dogbed template --list`
     \\                      shows the names: verdict, release-notes,
     \\                      reading-note.
+    \\  init                Scaffold a working site skeleton into the
+    \\                      current directory: routes.txt, src/ (one Knap
+    \\                      template per route plus layout.knap, the page
+    \\                      frame), data/, assets/, build.sh, README.md.
+    \\                      Strictly additive: an existing file is never
+    \\                      overwritten, modified or not; when a scaffold
+    \\                      entry supersedes an older one, the old file is
+    \\                      archived to a timestamped dir and the location
+    \\                      is reported. Bagged, not curbed — no trash day.
     \\
     \\Render options:
     \\  --data, -d <file>   JSON object with the template variables
@@ -93,6 +108,7 @@ pub fn main(init: std.process.Init) !u8 {
     }
     if (!std.mem.eql(u8, first, "render")) {
         if (std.mem.eql(u8, first, "template")) return templateCmd(init, args.items[1..]);
+        if (std.mem.eql(u8, first, "init")) return initCmd(init, args.items[1..]);
         return usage(init, "unknown command");
     }
     if (args.items.len == 1) return usage(init, "missing template file");
@@ -265,6 +281,165 @@ pub fn main(init: std.process.Init) !u8 {
     return 0;
 }
 
+fn initCmd(init: std.process.Init, rest: []const []const u8) !u8 {
+    const arena = init.arena.allocator();
+
+    for (rest) |arg| {
+        if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
+            try printStdout(init, usage_text);
+            return 0;
+        }
+        return usage(init, "init takes no arguments (it scaffolds the current directory)");
+    }
+
+    var out_buf: [4096]u8 = undefined;
+    var w = std.Io.File.stdout().writer(init.io, &out_buf);
+    var err_buf: [4096]u8 = undefined;
+    var ew = std.Io.File.stderr().writer(init.io, &err_buf);
+    scaffoldSite(.cwd(), init.io, arena, &w.interface, &ew.interface, &scaffold.dirs, &scaffold.files) catch |e| {
+        // Flush whatever progress lines were already printed.
+        w.flush() catch {};
+        ew.flush() catch {};
+        if (e == error.OutOfMemory) report("out of memory", .{});
+        return 1;
+    };
+    w.flush() catch return 1;
+    return 0;
+}
+
+/// Reports an init failure on `err` and yields error.ScaffoldFailed.
+fn failInit(err: *std.Io.Writer, comptime fmt: []const u8, args: anytype) error{ ScaffoldFailed, OutOfMemory } {
+    err.print("dogbed: init: " ++ fmt ++ "\n", args) catch {};
+    return error.ScaffoldFailed;
+}
+
+/// The `dogbed init` worker: scaffolds `scaffold_dirs`/`scaffold_files` into
+/// `dir` (the current directory), one report line per action on `out`, error
+/// messages on `err`.
+///
+/// The poop rules: only create files that don't exist — existence is the
+/// only test, so an existing file is kept byte-identical whether it is the
+/// user's or an older scaffold's. The one exception is a `supersedes` entry
+/// (a newer scaffold replacing its own old file): the existing bytes are
+/// compared against the old scaffold's content — a match is bagged into
+/// `.dogbed-archive/<timestamp>/` (location reported, never deleted) before
+/// the new content is written; anything else is user work and is kept.
+/// A directory squatting on a needed path fails loudly instead of guessing.
+pub fn scaffoldSite(
+    dir: std.Io.Dir,
+    io: std.Io,
+    arena: std.mem.Allocator,
+    out: *std.Io.Writer,
+    err: *std.Io.Writer,
+    scaffold_dirs: []const []const u8,
+    scaffold_files: []const scaffold.File,
+) error{ ScaffoldFailed, OutOfMemory }!void {
+    var created_dirs: usize = 0;
+    var created: usize = 0;
+    var kept: usize = 0;
+    var archived: usize = 0;
+
+    for (scaffold_dirs) |d| {
+        const status = dir.createDirPathStatus(io, d, .default_dir) catch |e| {
+            return failInit(err, "cannot create directory '{s}': {s}", .{ d, @errorName(e) });
+        };
+        if (status == .created) {
+            created_dirs += 1;
+            out.print("created  {s}/\n", .{d}) catch return error.ScaffoldFailed;
+        }
+    }
+
+    for (scaffold_files) |f| {
+        if (try tryCreateAndWrite(dir, io, f, out, err)) {
+            created += 1;
+            continue;
+        }
+        // Something exists at the path.
+        const st = dir.statFile(io, f.path, .{}) catch |e| {
+            return failInit(err, "cannot stat '{s}': {s}", .{ f.path, @errorName(e) });
+        };
+        if (st.kind == .directory) {
+            return failInit(err, "'{s}' exists as a directory — move it aside; init scaffolds files, it doesn't scaffold into them", .{f.path});
+        }
+        if (f.supersedes) |old| {
+            const bytes = dir.readFileAlloc(io, f.path, arena, .limited(max_input)) catch |e| {
+                return failInit(err, "cannot read '{s}' to check for a superseded scaffold file: {s}", .{ f.path, @errorName(e) });
+            };
+            if (!std.mem.eql(u8, bytes, old)) {
+                kept += 1;
+                out.print("kept     {s} (modified since it was scaffolded — init never overwrites, not even on supersede)\n", .{f.path}) catch return error.ScaffoldFailed;
+                continue;
+            }
+            // It is the old scaffold's own file: bag it, then write the new.
+            const archive_prefix = try ensureArchiveDir(dir, io, arena, out, err);
+            const archived_path = try std.fmt.allocPrint(arena, "{s}/{s}", .{ archive_prefix, basenameOf(f.path) });
+            dir.rename(f.path, dir, archived_path, io) catch |e| {
+                return failInit(err, "cannot archive '{s}' to '{s}': {s}", .{ f.path, archived_path, @errorName(e) });
+            };
+            archived += 1;
+            out.print("archived {s} -> {s}\n", .{ f.path, archived_path }) catch return error.ScaffoldFailed;
+            if (!try tryCreateAndWrite(dir, io, f, out, err)) {
+                // Unreachable in practice: the path was just renamed away.
+                return failInit(err, "'{s}' reappeared mid-supersede", .{f.path});
+            }
+            continue;
+        }
+        kept += 1;
+        out.print("kept     {s} (exists — init never overwrites)\n", .{f.path}) catch return error.ScaffoldFailed;
+    }
+
+    if (created + archived == 0) {
+        out.print("init: {d} kept, nothing created — the scaffold is already complete, nothing touched\n", .{kept}) catch return error.ScaffoldFailed;
+    } else {
+        out.print("init: {d} created ({d} dirs, {d} files), {d} kept, {d} superseded — next: ./build.sh (DOGBED=<path> picks the binary)\n", .{ created_dirs + created, created_dirs, created, kept, archived }) catch return error.ScaffoldFailed;
+    }
+}
+
+/// Exclusive-creates and writes one scaffold file. Returns false when
+/// something already exists at the path (the caller decides: keep or
+/// supersede). Any other failure is reported and returned as ScaffoldFailed.
+fn tryCreateAndWrite(dir: std.Io.Dir, io: std.Io, f: scaffold.File, out: *std.Io.Writer, err: *std.Io.Writer) error{ ScaffoldFailed, OutOfMemory }!bool {
+    const perms: std.Io.File.Permissions = if (f.executable) .executable_file else .default_file;
+    var file = dir.createFile(io, f.path, .{ .exclusive = true, .permissions = perms }) catch |e| switch (e) {
+        error.PathAlreadyExists => return false,
+        else => return failInit(err, "cannot create '{s}': {s}", .{ f.path, @errorName(e) }),
+    };
+    file.writeStreamingAll(io, f.content) catch |e| {
+        file.close(io);
+        return failInit(err, "cannot write '{s}': {s}", .{ f.path, @errorName(e) });
+    };
+    file.close(io);
+    out.print("created  {s}\n", .{f.path}) catch return error.ScaffoldFailed;
+    return true;
+}
+
+/// Creates `.dogbed-archive/<unix-time>/` (with a `-N` suffix if the same
+/// second already has one) and returns its path. Archives are never cleaned:
+/// no trash day, no auto-expiry.
+fn ensureArchiveDir(dir: std.Io.Dir, io: std.Io, arena: std.mem.Allocator, out: *std.Io.Writer, err: *std.Io.Writer) error{ ScaffoldFailed, OutOfMemory }![]const u8 {
+    const ts = std.Io.Timestamp.now(io, .real).toSeconds();
+    var n: usize = 0;
+    while (n < 1000) : (n += 1) {
+        const sub = if (n == 0)
+            try std.fmt.allocPrint(arena, "{s}/{d}", .{ scaffold.archive_dirname, ts })
+        else
+            try std.fmt.allocPrint(arena, "{s}/{d}-{d}", .{ scaffold.archive_dirname, ts, n });
+        const status = dir.createDirPathStatus(io, sub, .default_dir) catch |e| {
+            return failInit(err, "cannot create archive dir '{s}': {s}", .{ sub, @errorName(e) });
+        };
+        if (status == .created) {
+            out.print("archived -> {s}/ (superseded scaffold files live here now; nothing ever expires)\n", .{sub}) catch return error.ScaffoldFailed;
+            return sub;
+        }
+    }
+    return failInit(err, "no free archive dir name for timestamp {d}", .{ts});
+}
+
+fn basenameOf(path: []const u8) []const u8 {
+    if (std.mem.lastIndexOfScalar(u8, path, '/')) |i| return path[i + 1 ..];
+    return path;
+}
+
 fn templateCmd(init: std.process.Init, rest: []const []const u8) !u8 {
     const arena = init.arena.allocator();
 
@@ -419,7 +594,7 @@ fn printStdout(init: std.process.Init, text: []const u8) !void {
 fn usage(init: std.process.Init, msg: []const u8) u8 {
     _ = init;
     report("{s}", .{msg});
-    report("usage: dogbed render <template.knap> [...] | dogbed template <name>  (see --help)", .{});
+    report("usage: dogbed render <template.knap> [...] | dogbed template <name> | dogbed init  (see --help)", .{});
     return 1;
 }
 

@@ -24,6 +24,13 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
+    // Embedded site scaffold written by `dogbed init`.
+    const scaffold_mod = b.createModule(.{
+        .root_source_file = b.path("share/scaffold.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
     const cli_mod = b.createModule(.{
         .root_source_file = b.path("src/main.zig"),
         .target = target,
@@ -33,6 +40,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "oliver", .module = oliver_dep.module("oliver") },
             .{ .name = "build_options", .module = build_options_mod },
             .{ .name = "templates", .module = templates_mod },
+            .{ .name = "scaffold", .module = scaffold_mod },
         },
     });
 
@@ -51,6 +59,7 @@ pub fn build(b: *std.Build) void {
             .{ .name = "oliver", .module = oliver_dep.module("oliver") },
             .{ .name = "build_options", .module = build_options_mod },
             .{ .name = "templates", .module = templates_mod },
+            .{ .name = "scaffold", .module = scaffold_mod },
             .{ .name = "main", .module = cli_mod },
         },
     });

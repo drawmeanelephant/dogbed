@@ -7,6 +7,7 @@
     "Output is a bare HTML fragment unless @--title@ or @--css@ is passed. Either flag wraps the fragment in a minimal shell: HTML5 normally, XHTML 1.0 Strict under @--profile xhtml@. The title is HTML-escaped; the css hrefs pass through verbatim — URL or relative path, the consumer problem, not ours. No flags means byte-identical fragment output.",
     "@--max-output@ caps the final document in bytes, shell included (it also bounds the k4o stage; default 256 MiB, @0@ = unlimited). Nested loops multiply, so the default is generous but finite.",
     "@dogbed template <name>@ prints an embedded starter template to stdout so the user copies it and owns it. The library is exactly three starters — verdict, release-notes, reading-note — with matching example data. No discovery paths, no versioning, no fetching.",
+    "@dogbed init@ scaffolds a site skeleton into the current directory: @routes.txt@ (the route table), @src/@ (one Knap template per route, plus @layout.knap@ — the page frame new pages start from), @data/@ (one JSON object per route), @assets/@, and @build.sh@, which renders every route with the render command above. Poop rules, same as @k4o init@: only create files that don't exist — never overwrite an existing file, modified or not; a superseded scaffold file is archived to a timestamped dir and the location is reported (bagged, not curbed; no trash day). init scaffolds, nothing else.",
     "Errors go to stderr, stdout stays empty, exit 1. A failed render never emits a half-rendered document."
   ],
   "nongoals": [

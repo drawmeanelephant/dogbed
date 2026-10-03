@@ -1,0 +1,8 @@
+{
+  "title": "A dogbed site",
+  "intro": "This page is rendered by dogbed: src/index.knap plus this JSON file go in, site/index.html comes out. Change either and run ./build.sh.",
+  "pages": [
+    "\"About\":about.html"
+  ],
+  "body": "Textile inline markup is fair game in data strings — *bold*, _italic_, @code@, and \"links\":about.html. Data carries the words; the template carries the shape."
+}

@@ -66,6 +66,15 @@ The recurring job: structured findings in, consistent document out.
   the user copies it and owns it. The library is exactly three starters
   (verdict, release-notes, reading-note) with matching example data —
   no discovery paths, no versioning, no fetching.
+- `dogbed init` scaffolds a site skeleton into the current directory:
+  routes.txt (the route table), src/ (one Knap template per route, plus
+  layout.knap — the page frame new pages start from), data/ (one JSON
+  object per route), assets/, and build.sh, which renders every route with
+  the render command above. Poop rules, same as `k4o init`: only create
+  files that don't exist — never overwrite an existing file, modified or
+  not; a superseded scaffold file is archived to a timestamped dir and the
+  location is reported (bagged, not curbed; no trash day). init scaffolds,
+  nothing else.
 - Errors go to stderr, stdout stays empty, exit 1. A failed render never
   emits a half-rendered document.
 

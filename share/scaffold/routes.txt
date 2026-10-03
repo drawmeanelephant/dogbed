@@ -1,0 +1,6 @@
+# routes — one line per page: name<TAB>page title
+# name maps to src/name.knap + data/name.json -> site/name.html.
+# To add a page: a line here, a src/name.knap (start from a copy of
+# src/layout.knap), and a data/name.json with the fields it reads.
+index	A dogbed site
+about	About

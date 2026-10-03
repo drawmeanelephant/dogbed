@@ -1,0 +1,5 @@
+{
+  "title": "About",
+  "intro": "One paragraph of context for this site. Edit me.",
+  "body": "src/about.knap + data/about.json become site/about.html — build.sh walks routes.txt and calls dogbed render for each line."
+}

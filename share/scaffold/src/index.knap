@@ -1,0 +1,13 @@
+{# index.knap — the home page: a filled-in copy of layout.knap. Change the
+   shape here, change the words in data/index.json. #}
+{{ title | h1 }}
+
+{{ intro }}
+
+{{ "Pages on this site" | h2 }}
+
+{{ pages | list }}
+
+{{ body }}
+
+rendered by "dogbed":https://github.com/drawmeanelephant/dogbed — k4o templates it, oliver renders it.

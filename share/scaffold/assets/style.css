@@ -1,0 +1,15 @@
+/* site stylesheet — copied to site/style.css by build.sh. Edit freely. */
+:root { color-scheme: light dark; }
+body {
+  margin: 0 auto;
+  max-width: 42rem;
+  padding: 1rem 1.25rem 4rem;
+  font: 16px/1.6 system-ui, -apple-system, sans-serif;
+}
+h1, h2 { line-height: 1.25; }
+a { color: #b3541e; }
+code {
+  background: rgba(127, 127, 127, 0.15);
+  padding: 0.1em 0.3em;
+  border-radius: 3px;
+}

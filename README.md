@@ -21,6 +21,7 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
               [--title <text>] [--css <href>] [--head <html>] [--max-output <bytes>]
 dogbed template <name>
+dogbed init
 dogbed --help
 dogbed --version
 ```
@@ -62,6 +63,26 @@ Three starters ship inside the binary — no fetching, no discovery paths.
 ```
 dogbed template verdict > my-verdict.knap
 cat findings.json | dogbed render my-verdict.knap -d - --title "Review" > review.html
+```
+
+## Scaffolding a site
+
+`dogbed init` fills the current directory with a working skeleton:
+`routes.txt` (the route table), `src/` (one Knap template per route, plus
+`layout.knap` — the page frame new pages start from), `data/` (one JSON
+object per route), `assets/`, `build.sh`, and a README. The shape mirrors
+[this site's own docs build](docs/build.sh): one template plus one JSON file
+per route, wired by a dumb shell script.
+
+init is strictly additive: an existing file is never overwritten, modified
+or not — run it again any time, it only fills gaps. When a newer scaffold
+supersedes one of its own files, the old file is archived to a timestamped
+dir and the location is printed; nothing is ever deleted.
+
+```
+mkdir my-site && cd my-site
+dogbed init
+./build.sh          # renders routes.txt -> site/ (needs dogbed on PATH)
 ```
 
 ## Building

@@ -1,0 +1,17 @@
+{# layout.knap — the page frame. knap has no includes by design, so a page
+   owns its whole frame: start a new page from a copy of this file, then add
+   the route to routes.txt and write data/<name>.json with the fields this
+   template reads. The head of the page (charset, title, stylesheet) is not
+   knap's job — build.sh passes it to dogbed render as --title/--css. #}
+{{ title | h1 }}
+
+{{ intro }}
+
+{{ body }}
+
+{{ "Elsewhere" | h2 }}
+
+* "home":index.html
+* "about":about.html
+
+rendered by "dogbed":https://github.com/drawmeanelephant/dogbed — k4o templates it, oliver renders it.

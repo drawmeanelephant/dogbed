@@ -70,7 +70,7 @@ test "shell: no title and no css returns the fragment untouched" {
     const alloc = arena_state.allocator();
 
     const fragment = "<h1>hi</h1>\n<p>body</p>\n";
-    const out = try cli.wrapDocument(alloc, fragment, null, &.{}, &.{}, .html);
+    const out = try cli.wrapDocument(alloc, fragment, null, &.{}, &.{}, null, .html);
     try std.testing.expectEqualStrings(fragment, out);
 }
 
@@ -79,7 +79,7 @@ test "shell: title wraps the fragment and escapes the title" {
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
 
-    const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", "Art & \"<b>Science</b>\"", &.{}, &.{}, .html);
+    const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", "Art & \"<b>Science</b>\"", &.{}, &.{}, null, .html);
     try std.testing.expectEqualStrings(
         \\<!DOCTYPE html>
         \\<html>
@@ -100,11 +100,11 @@ test "shell: css without title gives a shell with no title element, links in ord
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
 
-    const one = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{"a.css"}, &.{}, .html);
+    const one = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{"a.css"}, &.{}, null, .html);
     try std.testing.expect(std.mem.indexOf(u8, one, "<title") == null);
     try std.testing.expect(std.mem.indexOf(u8, one, "<link rel=\"stylesheet\" href=\"a.css\">") != null);
 
-    const two = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{ "a.css", "b.css" }, &.{}, .html);
+    const two = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{ "a.css", "b.css" }, &.{}, null, .html);
     try std.testing.expect(std.mem.indexOf(u8, two, "<title") == null);
     const a = std.mem.indexOf(u8, two, "href=\"a.css\"").?;
     const b = std.mem.indexOf(u8, two, "href=\"b.css\"").?;
@@ -116,7 +116,7 @@ test "shell: xhtml profile emits the XHTML 1.0 Strict shell" {
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
 
-    const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", "T", &.{"c.css"}, &.{}, .xhtml);
+    const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", "T", &.{"c.css"}, &.{}, null, .xhtml);
     try std.testing.expect(std.mem.startsWith(u8, out, "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">"));
     try std.testing.expect(std.mem.indexOf(u8, out, "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />") != null);
     try std.testing.expect(std.mem.indexOf(u8, out, "<meta charset") == null);
@@ -128,7 +128,7 @@ test "shell: fragment without a trailing newline still lands on its own body lin
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
 
-    const out = try cli.wrapDocument(alloc, "<p>hi</p>", "T", &.{}, &.{}, .html);
+    const out = try cli.wrapDocument(alloc, "<p>hi</p>", "T", &.{}, &.{}, null, .html);
     try std.testing.expect(std.mem.indexOf(u8, out, "<p>hi</p>\n</body>") != null);
 }
 
@@ -140,12 +140,52 @@ test "shell: head lines splice into the head verbatim, in order, and trigger the
     const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{}, &.{
         "<link rel=\"icon\" href=\"favicon.png\">",
         "<meta property=\"og:title\" content=\"dogbed\">",
-    }, .html);
+    }, null, .html);
     try std.testing.expect(std.mem.indexOf(u8, out, "<title") == null);
     const icon = std.mem.indexOf(u8, out, "<link rel=\"icon\"").?;
     const og = std.mem.indexOf(u8, out, "<meta property").?;
     try std.testing.expect(icon < og);
     try std.testing.expect(std.mem.indexOf(u8, out, "<!DOCTYPE html>") != null);
+}
+
+test "shell: lang lands on the root element in both profiles" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    const html = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{}, &.{}, "en", .html);
+    try std.testing.expect(std.mem.startsWith(u8, html, "<!DOCTYPE html>\n<html lang=\"en\">\n<head>"));
+
+    // XHTML carries both the human-readable lang and its XML twin.
+    const xhtml = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{}, &.{}, "pt-BR", .xhtml);
+    try std.testing.expect(std.mem.indexOf(u8, xhtml, "<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"pt-BR\" xml:lang=\"pt-BR\">") != null);
+}
+
+test "shell: lang alone triggers the shell" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    // The lang attribute can only land on the shell's root element, so
+    // --lang with nothing else is still a full document.
+    const out = try cli.wrapDocument(alloc, "<p>hi</p>\n", null, &.{}, &.{}, "en", .html);
+    try std.testing.expect(std.mem.startsWith(u8, out, "<!DOCTYPE html>"));
+    try std.testing.expect(std.mem.indexOf(u8, out, "<html lang=\"en\">") != null);
+    try std.testing.expect(std.mem.indexOf(u8, out, "<title") == null);
+    try std.testing.expect(std.mem.endsWith(u8, out, "<body>\n<p>hi</p>\n</body>\n</html>\n"));
+}
+
+test "shell: no lang keeps the root element byte-identical in both profiles" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    const html = try cli.wrapDocument(alloc, "<p>hi</p>\n", "T", &.{}, &.{}, null, .html);
+    try std.testing.expect(std.mem.indexOf(u8, html, "\n<html>\n") != null);
+    try std.testing.expect(std.mem.indexOf(u8, html, "lang=") == null);
+
+    const xhtml = try cli.wrapDocument(alloc, "<p>hi</p>\n", "T", &.{}, &.{}, null, .xhtml);
+    try std.testing.expect(std.mem.indexOf(u8, xhtml, "<html xmlns=\"http://www.w3.org/1999/xhtml\">\n") != null);
 }
 
 test "templates: names are unique" {

@@ -51,14 +51,18 @@ The recurring job: structured findings in, consistent document out.
 ## CLI contract
 
 - `dogbed render <template.knap> [--data <file>] [--profile html|xhtml]
-  [--title <text>] [--css <href>] [--max-output <bytes>]`
+  [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
+  [--max-output <bytes>]`
 - `--data -` reads the JSON object from stdin:
   `cat findings.json | dogbed render verdict.knap -d - > verdict.html`
-- Output is a bare HTML fragment unless `--title` or `--css` is passed.
-  Either flag wraps the fragment in a minimal shell: HTML5 normally, XHTML
-  1.0 Strict under `--profile xhtml`. The title is HTML-escaped; the css
-  hrefs pass through verbatim (URL or relative path — the consumer's
-  problem, not ours). No flags means byte-identical fragment output.
+- Output is a bare HTML fragment unless `--title`, `--css`, `--head`, or
+  `--lang` is passed. Any of them wraps the fragment in a minimal shell:
+  HTML5 normally, XHTML 1.0 Strict under `--profile xhtml`. The title is
+  HTML-escaped; the css hrefs, head lines, and lang tag pass through
+  verbatim (URL, path, markup, or BCP 47 tag — the consumer's problem, not
+  ours). `--lang` lands on the root element: `lang` for HTML5, `lang` plus
+  `xml:lang` for XHTML (WCAG 3.1.1). No flags means byte-identical
+  fragment output.
 - `--max-output` caps the final document in bytes, shell included (it also
   bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
   multiply, so the default is generous but finite.

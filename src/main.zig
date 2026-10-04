@@ -64,12 +64,19 @@ const usage_text =
     \\  --css <href>        Add <link rel="stylesheet" href="..."> to the
     \\                      shell. Repeatable; links keep flag order. The
     \\                      href passes through verbatim (unvalidated).
-    \\                      Either --title or --css switches output from a
-    \\                      bare fragment to a full document.
+    \\                      Any of --title, --css, --head, --lang switches
+    \\                      output from a bare fragment to a full document.
     \\  --head <html>       Splice one verbatim line into the shell's
     \\                      <head> (meta tags, favicon links). Repeatable,
     \\                      kept in order; the markup passes through
     \\                      unvalidated — escape your own attributes.
+    \\  --lang <tag>        Set the document language on the shell's root
+    \\                      element — <html lang="…"> for HTML5, plus
+    \\                      xml:lang for XHTML (WCAG 3.1.1). The tag passes
+    \\                      through verbatim, so pick a valid BCP 47 tag
+    \\                      (en, pt-BR). Like --head, --lang alone switches
+    \\                      the output to a full document. The --lang=<tag>
+    \\                      form is also accepted.
     \\  --max-output, -m <bytes>
     \\                      Ceiling on the emitted document in bytes, shell
     \\                      included (it also bounds the intermediate Textile
@@ -122,6 +129,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer css.deinit(init.gpa);
     var head = std.ArrayList([]const u8).empty;
     defer head.deinit(init.gpa);
+    var lang: ?[]const u8 = null;
     var i: usize = 1;
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
@@ -188,6 +196,17 @@ pub fn main(init: std.process.Init) !u8 {
             const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
             if (value.len == 0) return usage(init, "missing value for --head");
             try head.append(init.gpa, value);
+        } else if (std.mem.eql(u8, arg, "--lang")) {
+            i += 1;
+            if (i >= args.items.len) return usage(init, "missing value for --lang");
+            if (lang != null) return usage(init, "duplicate --lang");
+            if (args.items[i].len == 0) return usage(init, "missing value for --lang");
+            lang = args.items[i];
+        } else if (std.mem.startsWith(u8, arg, "--lang=")) {
+            const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
+            if (value.len == 0) return usage(init, "missing value for --lang");
+            if (lang != null) return usage(init, "duplicate --lang");
+            lang = value;
         } else if (arg.len > 1 and arg[0] == '-') {
             return usage(init, "unknown option");
         } else {
@@ -254,13 +273,13 @@ pub fn main(init: std.process.Init) !u8 {
         return 1;
     };
 
-    // Optional document shell: --title/--css/--head wrap the fragment;
-    // without any of them the fragment is emitted byte-identical to a bare
-    // oliver render.
+    // Optional document shell: --title/--css/--head/--lang wrap the
+    // fragment; without any of them the fragment is emitted byte-identical
+    // to a bare oliver render.
     var final: []const u8 = html_buf.written();
-    if (title != null or css.items.len > 0 or head.items.len > 0) {
+    if (title != null or css.items.len > 0 or head.items.len > 0 or lang != null) {
         // Writer errors on an allocating buffer are allocation failures.
-        final = wrapDocument(arena, final, title, css.items, head.items, profile) catch {
+        final = wrapDocument(arena, final, title, css.items, head.items, lang, profile) catch {
             report("out of memory", .{});
             return 1;
         };
@@ -529,21 +548,27 @@ fn parseSize(text: []const u8) error{Invalid}!usize {
 }
 
 /// Wraps a rendered HTML fragment in a minimal document shell. The `title`
-/// is HTML-escaped; the `css` hrefs and the `head` lines pass through
-/// verbatim (they may be URLs, paths, or raw markup — validating them is
-/// the consumer's problem). With no title, no links, and no head lines the
-/// fragment is returned untouched, so the no-flag output stays
-/// byte-identical to a bare fragment.
-pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
-    if (title == null and css.len == 0 and head.len == 0) return fragment;
+/// is HTML-escaped; the `css` hrefs, `head` lines, and `lang` tag pass
+/// through verbatim (they may be URLs, paths, markup, or a BCP 47 tag —
+/// validating them is the consumer's problem). `lang` lands on the root
+/// element: `lang="…"` for HTML5, `lang` + `xml:lang` for XHTML. With no
+/// title, no links, no head lines, and no lang the fragment is returned
+/// untouched, so the no-flag output stays byte-identical to a bare
+/// fragment.
+pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, lang: ?[]const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
+    if (title == null and css.len == 0 and head.len == 0 and lang == null) return fragment;
 
     var buf = std.Io.Writer.Allocating.init(alloc);
     const w = &buf.writer;
     switch (profile) {
         .html => {
+            try w.writeAll("<!DOCTYPE html>\n");
+            if (lang) |l| {
+                try w.print("<html lang=\"{s}\">\n", .{l});
+            } else {
+                try w.writeAll("<html>\n");
+            }
             try w.writeAll(
-                \\<!DOCTYPE html>
-                \\<html>
                 \\<head>
                 \\<meta charset="utf-8">
                 \\
@@ -553,7 +578,13 @@ pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]co
             for (head) |line| try w.print("{s}\n", .{line});
         },
         .xhtml => {
-            try w.writeAll("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n<html xmlns=\"http://www.w3.org/1999/xhtml\">\n<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
+            try w.writeAll("<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd\">\n");
+            if (lang) |l| {
+                try w.print("<html xmlns=\"http://www.w3.org/1999/xhtml\" lang=\"{s}\" xml:lang=\"{s}\">\n", .{ l, l });
+            } else {
+                try w.writeAll("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
+            }
+            try w.writeAll("<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
             if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
             for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\" />\n", .{href});
             for (head) |line| try w.print("{s}\n", .{line});

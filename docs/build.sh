@@ -23,7 +23,7 @@ for page in index shell templates contract dogfood deploy; do
     esac
     "$DOGBED" render "docs/src/$page.knap" \
         -d "docs/data/$page.json" \
-        --title "$t" --css style.css \
+        --title "$t" --css style.css --lang en \
         --head '<link rel="icon" type="image/png" href="assets/oliver-favicon.png">' \
         --head '<meta property="og:title" content="dogbed">' \
         --head '<meta property="og:description" content="the dog builds its own docs">' \

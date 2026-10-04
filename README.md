@@ -19,7 +19,8 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 
 ```
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
-              [--title <text>] [--css <href>] [--head <html>] [--max-output <bytes>]
+              [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
+              [--max-output <bytes>]
 dogbed template <name>
 dogbed init
 dogbed --help
@@ -37,14 +38,17 @@ dogbed --version
   relative path, unvalidated.
 - `--head <html>` — splice one verbatim line into the shell's `<head>`
   (meta tags, favicon links). Repeatable, order kept, unvalidated.
+- `--lang <tag>` — set the document language on the shell's root element
+  (`<html lang="…">`; XHTML also gets `xml:lang`). Emitted verbatim —
+  pick a valid BCP 47 tag (`en`, `pt-BR`).
 - `--max-output, -m` — ceiling on the emitted document in bytes, shell
   included (`k`/`m`/`g` suffixes accepted). Default 256 MiB; `0` means no
   limit.
 
 **Fragment vs document:** by default `render` emits a bare HTML fragment
-(`<h1>…</h1><p>…</p>`), ready to pipe into something bigger. Passing
-`--title` or `--css` finishes the job instead: the same fragment wrapped in
-a minimal HTML shell, nothing more.
+(`<h1>…</h1><p>…</p>`), ready to pipe into something bigger. Passing any
+shell flag (`--title`, `--css`, `--head`, `--lang`) finishes the job
+instead: the same fragment wrapped in a minimal HTML shell, nothing more.
 
 On any error the message goes to stderr, stdout stays empty, exit code is 1.
 

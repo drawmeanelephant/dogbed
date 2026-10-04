@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>dogbed — the document shell</title>
@@ -11,7 +11,7 @@
 </head>
 <body>
 <h1>The document shell</h1>
-<p>By default <code>render</code> emits a bare HTML fragment — ready to pipe into something bigger. Passing <code>--title</code> or <code>--css</code> switches the output to a finished document: the same fragment wrapped in a minimal HTML shell. With no flags the fragment is byte-identical to what oliver rendered alone.</p>
+<p>By default <code>render</code> emits a bare HTML fragment — ready to pipe into something bigger. Passing <code>--title</code>, <code>--css</code>, <code>--head</code> or <code>--lang</code> switches the output to a finished document: the same fragment wrapped in a minimal HTML shell. With no flags the fragment is byte-identical to what oliver rendered alone.</p>
 <p>A bare fragment — no shell flags:</p>
 <pre><code>$ dogbed render share/verdict.knap -d share/verdict.json
 &lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
@@ -69,6 +69,13 @@
 &lt;/ol&gt;
 &lt;/body&gt;
 &lt;/html&gt;
+</code></pre>
+<h2><code>--lang</code></h2>
+<p><code>--lang</code> sets the document language on the shell’s root element — what screen readers pick pronunciation rules from (WCAG 3.1.1, Level A). HTML5 gets <code>lang</code>; XHTML also gets <code>xml:lang</code>. The tag passes through verbatim, so pick a valid BCP 47 tag: <code>en</code>, <code>pt-BR</code>.</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --lang en --title 'Verdict — dogbed' | head -3
+&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
 </code></pre>
 <h2><code>--max-output</code></h2>
 <p><code>--max-output</code> caps the final document — shell included. The k4o stage is bounded by the same value, so a runaway template dies early:</p>

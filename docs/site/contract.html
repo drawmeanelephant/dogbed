@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <title>dogbed — the CLI contract</title>
@@ -14,9 +14,9 @@
 <p>This page is the SPEC, rendered by the tool the SPEC specifies. Transcribed from <code>SPEC.md</code> at docs-build time — the spec documents itself.</p>
 <h2>CLI contract</h2>
 <ul>
-<li><code>dogbed render &lt;template.knap&gt; [--data &lt;file&gt;] [--profile html|xhtml] [--title &lt;text&gt;] [--css &lt;href&gt;] [--max-output &lt;bytes&gt;]</code></li>
+<li><code>dogbed render &lt;template.knap&gt; [--data &lt;file&gt;] [--profile html|xhtml] [--title &lt;text&gt;] [--css &lt;href&gt;] [--head &lt;html&gt;] [--lang &lt;tag&gt;] [--max-output &lt;bytes&gt;]</code></li>
 <li><code>--data -</code> reads the JSON object from stdin: <code>cat findings.json | dogbed render verdict.knap -d - &gt; verdict.html</code></li>
-<li>Output is a bare HTML fragment unless <code>--title</code> or <code>--css</code> is passed. Either flag wraps the fragment in a minimal shell: HTML5 normally, XHTML 1.0 Strict under <code>--profile xhtml</code>. The title is HTML-escaped; the css hrefs pass through verbatim — URL or relative path, the consumer problem, not ours. No flags means byte-identical fragment output.</li>
+<li>Output is a bare HTML fragment unless <code>--title</code>, <code>--css</code>, <code>--head</code> or <code>--lang</code> is passed. Any of them wraps the fragment in a minimal shell: HTML5 normally, XHTML 1.0 Strict under <code>--profile xhtml</code>. The title is HTML-escaped; the css hrefs, head lines, and lang tag pass through verbatim — URL, path, markup, or BCP 47 tag, the consumer problem, not ours. <code>--lang</code> lands on the root element: <code>lang</code> for HTML5, <code>lang</code> plus <code>xml:lang</code> for XHTML. No flags means byte-identical fragment output.</li>
 <li><code>--max-output</code> caps the final document in bytes, shell included (it also bounds the k4o stage; default 256 MiB, <code>0</code> = unlimited). Nested loops multiply, so the default is generous but finite.</li>
 <li><code>dogbed template &lt;name&gt;</code> prints an embedded starter template to stdout so the user copies it and owns it. The library is exactly three starters — verdict, release-notes, reading-note — with matching example data. No discovery paths, no versioning, no fetching.</li>
 <li><code>dogbed init</code> scaffolds a site skeleton into the current directory: <code>routes.txt</code> (the route table), <code>src/</code> (one Knap template per route, plus <code>layout.knap</code> — the page frame new pages start from), <code>data/</code> (one JSON object per route), <code>assets/</code>, and <code>build.sh</code>, which renders every route with the render command above. Poop rules, same as <code>k4o init</code>: only create files that don’t exist — never overwrite an existing file, modified or not; a superseded scaffold file is archived to a timestamped dir and the location is reported (bagged, not curbed; no trash day). init scaffolds, nothing else.</li>

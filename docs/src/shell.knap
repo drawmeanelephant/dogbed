@@ -1,6 +1,7 @@
 {# shell.knap — data: title, intro_p, fragment_p, fragment_tr, title_p,
-   title_tr, css_p, document_p, document_tr, xhtml_p, xhtml_tr, cap_p,
-   cap_tr, gotcha1_p, gotcha1_tr, gotcha2_p, gotcha2_tr, fix_p, fix_tr, nav #}{{ title | h1 }}
+   title_tr, css_p, document_p, document_tr, xhtml_p, xhtml_tr, lang_p,
+   lang_tr, cap_p, cap_tr, gotcha1_p, gotcha1_tr, gotcha2_p, gotcha2_tr,
+   fix_p, fix_tr, nav #}{{ title | h1 }}
 
 {{ intro_p }}
 
@@ -27,6 +28,12 @@
 {{ xhtml_p }}
 
 {{ xhtml_tr | codeblock }}
+
+{{ "@--lang@" | h2 }}
+
+{{ lang_p }}
+
+{{ lang_tr | codeblock }}
 
 {{ "@--max-output@" | h2 }}
 

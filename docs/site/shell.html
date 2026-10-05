@@ -78,9 +78,9 @@
 &lt;head&gt;
 </code></pre>
 <h2><code>--max-output</code></h2>
-<p><code>--max-output</code> caps the final document — shell included. The k4o stage is bounded by the same value, so a runaway template dies early:</p>
+<p><code>--max-output</code> caps the final document — shell included. Every output stage is bounded by the same value, so a runaway template or an escaping-heavy body dies the moment a write would cross the cap: over-limit output is never materialized. An emitted-byte ceiling is not a memory or CPU sandbox — embedders still need timeouts, concurrency limits, and OS-level resource controls:</p>
 <pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --title T --css style.css --max-output 250
-dogbed: output (297 bytes) exceeds --max-output (250)
+dogbed: output exceeds --max-output (250)
 </code></pre>
 <h2>Data gotchas (dogfood)</h2>
 <p>Dogfood finding: Textile typography eats <code>--</code> in data. A JSON value containing <code>--title</code> renders as <code>—title</code> — the value flows through the Textile intermediate, and Textile converts <code>--</code> to an em-dash. Surprising for CLI flags and technical content; plan around it:</p>

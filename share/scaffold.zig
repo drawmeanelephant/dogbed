@@ -22,9 +22,9 @@ pub const File = struct {
     /// Byte content of the previous scaffold version's file at this path.
     /// When init finds an existing file whose bytes match exactly, it is the
     /// old scaffold's file: archive it, then write the new content. Anything
-    /// else at the path is the user's now — kept untouched. v1 supersedes
-    /// nothing; the mechanism is here, tested, for the first change that
-    /// needs it.
+    /// else at the path is the user's now — kept untouched. build.sh
+    /// supersedes its v1 (the first change to need the mechanism): the safe
+    /// temp-then-rename rebuild script replaces the plain-redirect one.
     supersedes: ?[]const u8 = null,
 };
 
@@ -33,7 +33,7 @@ pub const dirs = [_][]const u8{ "assets", "data", "src" };
 pub const files = [_]File{
     .{ .path = "README.md", .content = @embedFile("scaffold/README.md") },
     .{ .path = "routes.txt", .content = @embedFile("scaffold/routes.txt") },
-    .{ .path = "build.sh", .content = @embedFile("scaffold/build.sh"), .executable = true },
+    .{ .path = "build.sh", .content = @embedFile("scaffold/build.sh"), .executable = true, .supersedes = @embedFile("scaffold/build.sh.v1") },
     .{ .path = "assets/style.css", .content = @embedFile("scaffold/assets/style.css") },
     .{ .path = "data/about.json", .content = @embedFile("scaffold/data/about.json") },
     .{ .path = "data/index.json", .content = @embedFile("scaffold/data/index.json") },

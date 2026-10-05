@@ -65,7 +65,11 @@ The recurring job: structured findings in, consistent document out.
   fragment output.
 - `--max-output` caps the final document in bytes, shell included (it also
   bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
-  multiply, so the default is generous but finite.
+  multiply, so the default is generous but finite. The cap is enforced as
+  the document renders: each stage aborts the moment a write would cross
+  it, so over-limit output is never materialized. An emitted-byte ceiling
+  is not a memory or CPU sandbox — hosted callers still need timeouts,
+  concurrency limits, and OS-level resource controls.
 - `dogbed template <name>` prints an embedded starter template to stdout so
   the user copies it and owns it. The library is exactly three starters
   (verdict, release-notes, reading-note) with matching example data —

@@ -15,7 +15,11 @@
 //!
 //! Exit codes: 0 = success, 1 = any error. On error the message goes to
 //! stderr and stdout stays empty — rendering is buffered, so partially
-//! rendered output is never emitted.
+//! rendered output is never emitted. --max-output is enforced as bytes are
+//! written: the HTML stage and the document shell abort at the cap instead
+//! of materializing an oversized document first. An emitted-byte ceiling is
+//! not a memory or CPU sandbox — embedders still need timeouts, concurrency
+//! limits, and OS-level resource controls.
 
 const std = @import("std");
 const kt = @import("k4o");
@@ -83,7 +87,12 @@ const usage_text =
     \\                      render). Nested loops multiply, so a small
     \\                      template over modest data can ask for far more
     \\                      than you expect. Default 268435456 (256 MiB);
-    \\                      0 means no limit.
+    \\                      0 means no limit. The cap trips the moment a
+    \\                      write would cross it, so over-limit output is
+    \\                      never materialized. An emitted-byte ceiling is
+    \\                      not a memory or CPU sandbox: embedders still
+    \\                      need timeouts, concurrency limits, and
+    \\                      OS-level resource controls.
     \\  --help, -h          Show this help.
     \\  --version, -v       Show the version.
     \\
@@ -267,32 +276,42 @@ pub fn main(init: std.process.Init) !u8 {
     };
     defer result.deinit();
 
-    var html_buf = std.Io.Writer.Allocating.init(arena);
-    oliver.html.render(arena, &html_buf.writer, &result.document, .{ .profile = profile }) catch |e| {
-        report("render: {s}", .{@errorName(e)});
+    // Stage 2: Textile --oliver--> HTML, into a bounded buffer: the write
+    // that would cross --max-output aborts here, so an oversized fragment is
+    // never materialized. A cap trip and an allocation failure both surface
+    // as error.WriteFailed; `exceeded` tells them apart.
+    var html_out = Bounded.init(arena, max_output);
+    oliver.html.render(arena, &html_out.writer, &result.document, .{ .profile = profile }) catch |e| {
+        if (html_out.exceeded) {
+            report("output exceeds --max-output ({d})", .{max_output});
+        } else {
+            report("render: {s}", .{@errorName(e)});
+        }
         return 1;
     };
 
     // Optional document shell: --title/--css/--head/--lang wrap the
     // fragment; without any of them the fragment is emitted byte-identical
-    // to a bare oliver render.
-    var final: []const u8 = html_buf.written();
+    // to a bare oliver render. The shell stage is bounded by the same cap.
+    var final: []const u8 = html_out.written();
     if (title != null or css.items.len > 0 or head.items.len > 0 or lang != null) {
-        // Writer errors on an allocating buffer are allocation failures.
-        final = wrapDocument(arena, final, title, css.items, head.items, lang, profile) catch {
-            report("out of memory", .{});
-            return 1;
+        final = wrapDocument(arena, final, title, css.items, head.items, lang, profile, max_output) catch |e| switch (e) {
+            error.OutputLimitExceeded => {
+                report("output exceeds --max-output ({d})", .{max_output});
+                return 1;
+            },
+            // Writer errors on an allocating buffer are allocation failures.
+            error.WriteFailed => {
+                report("out of memory", .{});
+                return 1;
+            },
         };
     }
 
-    // The cap covers the final document, shell included.
-    if (max_output != 0 and final.len > max_output) {
-        report("output ({d} bytes) exceeds --max-output ({d})", .{ final.len, max_output });
-        return 1;
-    }
-
-    // Buffered render complete: emit in one write so that an error never
-    // produces half-rendered output.
+    // Both output stages enforce the cap as they write, so `final` is within
+    // it (or the cap is 0 = unlimited) — nothing left to check. Buffered
+    // render complete: emit in one write so that an error never produces
+    // half-rendered output.
     var out_buf: [8192]u8 = undefined;
     var w = std.Io.File.stdout().writer(init.io, &out_buf);
     w.interface.writeAll(final) catch return 1;
@@ -384,6 +403,13 @@ pub fn scaffoldSite(
             const bytes = dir.readFileAlloc(io, f.path, arena, .limited(max_input)) catch |e| {
                 return failInit(err, "cannot read '{s}' to check for a superseded scaffold file: {s}", .{ f.path, @errorName(e) });
             };
+            if (std.mem.eql(u8, bytes, f.content)) {
+                // Already the current scaffold's file — a plain keep, not a
+                // supersede candidate.
+                kept += 1;
+                out.print("kept     {s} (exists — init never overwrites)\n", .{f.path}) catch return error.ScaffoldFailed;
+                continue;
+            }
             if (!std.mem.eql(u8, bytes, old)) {
                 kept += 1;
                 out.print("kept     {s} (modified since it was scaffolded — init never overwrites, not even on supersede)\n", .{f.path}) catch return error.ScaffoldFailed;
@@ -555,11 +581,29 @@ fn parseSize(text: []const u8) error{Invalid}!usize {
 /// title, no links, no head lines, and no lang the fragment is returned
 /// untouched, so the no-flag output stays byte-identical to a bare
 /// fragment.
-pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, lang: ?[]const u8, profile: oliver.OutputProfile) std.Io.Writer.Error![]const u8 {
+///
+/// The shell is assembled through a `Bounded` writer capped at `max_output`
+/// (0 = unlimited), so shell overhead — escaped title, repeated links and
+/// head lines — cannot smuggle an over-limit document past the cap: the
+/// write that would cross it aborts assembly before the oversized document
+/// exists. The cap trip comes back as `error.OutputLimitExceeded`; a
+/// genuine allocation failure is `error.WriteFailed`. The returned slice is
+/// allocated with `alloc`.
+pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, lang: ?[]const u8, profile: oliver.OutputProfile, max_output: usize) error{ WriteFailed, OutputLimitExceeded }![]const u8 {
     if (title == null and css.len == 0 and head.len == 0 and lang == null) return fragment;
 
-    var buf = std.Io.Writer.Allocating.init(alloc);
-    const w = &buf.writer;
+    var buf = Bounded.init(alloc, max_output);
+    errdefer buf.deinit();
+    writeShell(&buf.writer, fragment, title, css, head, lang, profile) catch |e| switch (e) {
+        error.WriteFailed => if (buf.exceeded) return error.OutputLimitExceeded else return error.WriteFailed,
+    };
+    return buf.written();
+}
+
+/// Writes the whole document — shell prefix, fragment, suffix — into `w`.
+/// One function so every byte, escaped title included, passes through the
+/// caller's bounded writer and charges the cap as it lands.
+fn writeShell(w: *std.Io.Writer, fragment: []const u8, title: ?[]const u8, css: []const []const u8, head: []const []const u8, lang: ?[]const u8, profile: oliver.OutputProfile) std.Io.Writer.Error!void {
     switch (profile) {
         .html => {
             try w.writeAll("<!DOCTYPE html>\n");
@@ -573,7 +617,11 @@ pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]co
                 \\<meta charset="utf-8">
                 \\
             );
-            if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
+            if (title) |t| {
+                try w.writeAll("<title>");
+                try escapeHtmlTo(w, t);
+                try w.writeAll("</title>\n");
+            }
             for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\">\n", .{href});
             for (head) |line| try w.print("{s}\n", .{line});
         },
@@ -585,7 +633,11 @@ pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]co
                 try w.writeAll("<html xmlns=\"http://www.w3.org/1999/xhtml\">\n");
             }
             try w.writeAll("<head>\n<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\" />\n");
-            if (title) |t| try w.print("<title>{s}</title>\n", .{try escapeHtml(alloc, t)});
+            if (title) |t| {
+                try w.writeAll("<title>");
+                try escapeHtmlTo(w, t);
+                try w.writeAll("</title>\n");
+            }
             for (css) |href| try w.print("<link rel=\"stylesheet\" href=\"{s}\" />\n", .{href});
             for (head) |line| try w.print("{s}\n", .{line});
         },
@@ -597,23 +649,151 @@ pub fn wrapDocument(alloc: std.mem.Allocator, fragment: []const u8, title: ?[]co
     try w.writeAll(fragment);
     if (fragment.len == 0 or fragment[fragment.len - 1] != '\n') try w.writeByte('\n');
     try w.writeAll("</body>\n</html>\n");
+}
+
+/// Escapes `& < > "` for HTML text content and attribute values, writing
+/// straight into `w` — no intermediate buffer, so a bounded writer sees
+/// every escaped byte as it is produced.
+pub fn escapeHtmlTo(w: *std.Io.Writer, text: []const u8) std.Io.Writer.Error!void {
+    for (text) |c| {
+        switch (c) {
+            '&' => try w.writeAll("&amp;"),
+            '<' => try w.writeAll("&lt;"),
+            '>' => try w.writeAll("&gt;"),
+            '"' => try w.writeAll("&quot;"),
+            else => try w.writeByte(c),
+        }
+    }
+}
+
+/// Escapes `& < > "` and returns the bytes, allocated with `alloc`.
+pub fn escapeHtml(alloc: std.mem.Allocator, text: []const u8) std.Io.Writer.Error![]const u8 {
+    var buf = std.Io.Writer.Allocating.init(alloc);
+    try escapeHtmlTo(&buf.writer, text);
     return buf.written();
 }
 
-/// Escapes `& < > "` for HTML text content and attribute values.
-pub fn escapeHtml(alloc: std.mem.Allocator, text: []const u8) std.Io.Writer.Error![]const u8 {
-    var buf = std.Io.Writer.Allocating.init(alloc);
-    for (text) |c| {
-        switch (c) {
-            '&' => try buf.writer.writeAll("&amp;"),
-            '<' => try buf.writer.writeAll("&lt;"),
-            '>' => try buf.writer.writeAll("&gt;"),
-            '"' => try buf.writer.writeAll("&quot;"),
-            else => try buf.writer.writeByte(c),
-        }
+/// A `std.Io.Writer.Allocating` twin whose total output is capped at
+/// `max_output` bytes (0 = unlimited). Every write that would push the
+/// total past the cap fails and sets `exceeded`, so the caller can tell an
+/// output-limit trip from an allocation failure — through the writer
+/// interface both are the same `error.WriteFailed`.
+///
+/// Capacity grows geometrically but never beyond the cap, so an over-limit
+/// render aborts with at most the configured bytes of output storage: the
+/// oversized document is never materialized. The cap covers emitted bytes
+/// only — it is not a memory or CPU sandbox. Hosted callers still need
+/// timeouts, concurrency limits, and OS-level resource controls.
+pub const Bounded = struct {
+    allocator: std.mem.Allocator,
+    writer: std.Io.Writer,
+    max_output: usize,
+    exceeded: bool = false,
+
+    pub fn init(allocator: std.mem.Allocator, max_output: usize) Bounded {
+        return .{
+            .allocator = allocator,
+            .writer = .{ .buffer = &.{}, .vtable = &vtable },
+            .max_output = max_output,
+        };
     }
-    return buf.written();
-}
+
+    pub fn deinit(b: *Bounded) void {
+        if (b.writer.buffer.len == 0) return;
+        b.allocator.rawFree(b.writer.buffer, alignment, @returnAddress());
+        b.* = undefined;
+    }
+
+    /// Bytes written so far — at most `max_output` when the cap is set.
+    pub fn written(b: *Bounded) []u8 {
+        return b.writer.buffered();
+    }
+
+    const alignment: std.mem.Alignment = .of(u8);
+
+    /// Fails the write. A cap crossing is reported as a limit trip; with
+    /// no cap set (overflow of an unlimited render) it stays a plain
+    /// allocation-style failure.
+    fn failAppend(b: *Bounded) std.Io.Writer.Error {
+        if (b.max_output != 0) b.exceeded = true;
+        return error.WriteFailed;
+    }
+
+    fn ensureTotalCapacity(b: *Bounded, new_capacity: usize) std.Io.Writer.Error!void {
+        const w = &b.writer;
+        if (w.buffer.len >= new_capacity) return;
+        var better_capacity: usize = undefined;
+        if (b.max_output != 0) {
+            if (new_capacity > b.max_output) return b.failAppend();
+            // Geometric growth, clamped so storage never passes the cap.
+            better_capacity = @min(std.ArrayList(u8).growCapacity(new_capacity), b.max_output);
+        } else {
+            better_capacity = std.ArrayList(u8).growCapacity(new_capacity);
+        }
+        const old_memory = w.buffer;
+        if (old_memory.len > 0) {
+            if (b.allocator.rawRemap(old_memory, alignment, better_capacity, @returnAddress())) |new| {
+                w.buffer = new[0..better_capacity];
+                return;
+            }
+        }
+        const new_memory = (b.allocator.rawAlloc(better_capacity, alignment, @returnAddress()) orelse
+            return error.WriteFailed)[0..better_capacity];
+        const saved = old_memory[0..w.end];
+        @memcpy(new_memory[0..saved.len], saved);
+        if (old_memory.len != 0) b.allocator.rawFree(old_memory, alignment, @returnAddress());
+        w.buffer = new_memory;
+    }
+
+    fn ensureUnusedCapacity(b: *Bounded, additional: usize) std.Io.Writer.Error!void {
+        if (additional == 0) return;
+        const needed = std.math.add(usize, b.writer.end, additional) catch return b.failAppend();
+        return b.ensureTotalCapacity(needed);
+    }
+
+    fn drain(w: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+        const b: *Bounded = @fieldParentPtr("writer", w);
+        // The exact number of bytes this call appends, checked before any
+        // of them are stored.
+        var total: usize = 0;
+        for (data[0 .. data.len - 1]) |bytes| {
+            total = std.math.add(usize, total, bytes.len) catch return b.failAppend();
+        }
+        const pattern = data[data.len - 1];
+        const splat_len = std.math.mul(usize, pattern.len, splat) catch return b.failAppend();
+        total = std.math.add(usize, total, splat_len) catch return b.failAppend();
+        try b.ensureUnusedCapacity(total);
+        for (data[0 .. data.len - 1]) |bytes| {
+            @memcpy(w.buffer[w.end..][0..bytes.len], bytes);
+            w.end += bytes.len;
+        }
+        switch (pattern.len) {
+            0 => {},
+            1 => {
+                @memset(w.buffer[w.end..][0..splat], pattern[0]);
+                w.end += splat;
+            },
+            else => for (0..splat) |_| {
+                @memcpy(w.buffer[w.end..][0..pattern.len], pattern);
+                w.end += pattern.len;
+            },
+        }
+        return total;
+    }
+
+    fn rebase(w: *std.Io.Writer, preserve: usize, minimum_len: usize) std.Io.Writer.Error!void {
+        const b: *Bounded = @fieldParentPtr("writer", w);
+        const total = std.math.add(usize, preserve, minimum_len) catch return b.failAppend();
+        try b.ensureTotalCapacity(total);
+        try b.ensureUnusedCapacity(minimum_len);
+    }
+
+    const vtable: std.Io.Writer.VTable = .{
+        .drain = drain,
+        .flush = std.Io.Writer.noopFlush,
+        .rebase = rebase,
+    };
+};
 
 fn printStdout(init: std.process.Init, text: []const u8) !void {
     var out_buf: [4096]u8 = undefined;

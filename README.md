@@ -43,7 +43,10 @@ dogbed --version
   pick a valid BCP 47 tag (`en`, `pt-BR`).
 - `--max-output, -m` — ceiling on the emitted document in bytes, shell
   included (`k`/`m`/`g` suffixes accepted). Default 256 MiB; `0` means no
-  limit.
+  limit. Enforced while the document renders: every stage stops the moment
+  a write would cross the cap, so over-limit output is never materialized.
+  An emitted-byte ceiling is not a memory or CPU sandbox — embedders still
+  need timeouts, concurrency limits, and OS-level resource controls.
 
 **Fragment vs document:** by default `render` emits a bare HTML fragment
 (`<h1>…</h1><p>…</p>`), ready to pipe into something bigger. Passing any

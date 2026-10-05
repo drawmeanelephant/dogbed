@@ -657,3 +657,253 @@ test "max-output: allocation failure stays distinct from a limit trip" {
     );
 }
 
+// -- build scripts: failed rebuilds must not truncate pages (issue #15) --
+
+/// A temp site scaffolded by `cli.scaffoldSite`, with helpers to run its
+/// build.sh and inspect the site it produces. The tests below exercise the
+/// actual build-script interface: `sh build.sh` with DOGBED pointing at the
+/// real binary, exactly as a user would run it.
+const BuildRun = struct {
+    tmp: std.testing.TmpDir,
+    arena_state: std.heap.ArenaAllocator,
+
+    const io = std.testing.io;
+
+    fn start() BuildRun {
+        return .{
+            .tmp = std.testing.tmpDir(.{}),
+            .arena_state = std.heap.ArenaAllocator.init(std.testing.allocator),
+        };
+    }
+
+    fn deinit(self: *BuildRun) void {
+        self.tmp.cleanup();
+        self.arena_state.deinit();
+    }
+
+    /// Runs `cli.scaffoldSite` in this run's dir: the site skeleton,
+    /// build.sh executable, the works.
+    fn scaffoldSite(self: *BuildRun) !void {
+        var out_buf = std.Io.Writer.Allocating.init(self.arena_state.allocator());
+        var err_buf = std.Io.Writer.Allocating.init(self.arena_state.allocator());
+        try cli.scaffoldSite(self.tmp.dir, std.testing.io, self.arena_state.allocator(), &out_buf.writer, &err_buf.writer, &scaffold.dirs, &scaffold.files);
+    }
+
+    /// Runs `sh build.sh` in the site with DOGBED set to `dogbed_value`,
+    /// inheriting the rest of the environment (the script needs PATH for
+    /// its external utilities).
+    fn runBuild(self: *BuildRun, dogbed_value: []const u8) !std.process.RunResult {
+        const alloc = self.arena_state.allocator();
+        var env = std.process.Environ.Map.init(alloc);
+        switch (@import("builtin").os.tag) {
+            .windows => try env.putWindowsBlock(std.testing.environ.block.view()),
+            else => try env.putPosixBlock(std.testing.environ.block.view()),
+        }
+        try env.put("DOGBED", dogbed_value);
+        return std.process.run(alloc, std.testing.io, .{
+            .argv = &.{ "sh", "build.sh" },
+            .cwd = .{ .dir = self.tmp.dir },
+            .environ_map = &env,
+        });
+    }
+
+    fn readFile(self: *BuildRun, path: []const u8) ![]const u8 {
+        return self.tmp.dir.readFileAlloc(std.testing.io, path, self.arena_state.allocator(), .limited(1 << 20));
+    }
+
+    fn writeFile(self: *BuildRun, path: []const u8, data: []const u8) !void {
+        try self.tmp.dir.writeFile(std.testing.io, .{ .sub_path = path, .data = data });
+    }
+
+    /// Fails the test if any entry in `dir` looks like a leftover temp file.
+    fn expectNoTempFiles(self: *BuildRun, dir_path: []const u8) !void {
+        var site = try self.tmp.dir.openDir(std.testing.io, dir_path, .{ .iterate = true });
+        defer site.close(std.testing.io);
+        var it = site.iterate();
+        while (try it.next(std.testing.io)) |entry| {
+            try std.testing.expect(!std.mem.startsWith(u8, entry.name, "."));
+            try std.testing.expect(!std.mem.endsWith(u8, entry.name, ".tmp"));
+        }
+    }
+
+    fn expectExited(self: *BuildRun, result: std.process.RunResult, code: u8) !void {
+        _ = self;
+        try std.testing.expectEqual(std.process.Child.Term{ .exited = code }, result.term);
+    }
+};
+
+test "build script: scaffold build renders every route, script executable" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.scaffoldSite();
+
+    const result = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(result, 0);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "rendered: index") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "rendered: about") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.readFile("site/index.html"), "<h1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, try run.readFile("site/about.html"), "<h1") != null);
+    try run.expectNoTempFiles("site");
+}
+
+test "build script: failed rebuild with malformed JSON leaves the page byte-identical" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.scaffoldSite();
+    const first = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(first, 0);
+    const previous = try run.readFile("site/index.html");
+
+    try run.writeFile("data/index.json", "{broken JSON\n");
+    const failed = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(failed, 1);
+    // stderr carries the diagnostic; nothing was installed.
+    try std.testing.expect(std.mem.indexOf(u8, failed.stderr, "invalid JSON") != null);
+    try std.testing.expectEqualStrings(previous, try run.readFile("site/index.html"));
+    try run.expectNoTempFiles("site");
+}
+
+test "build script: failed rebuild with a malformed template leaves the page byte-identical" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.scaffoldSite();
+    const first = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(first, 0);
+    const previous = try run.readFile("site/about.html");
+
+    try run.writeFile("src/about.knap", "h1. broken\n{{ never_closed\n");
+    const failed = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(failed, 1);
+    try std.testing.expect(std.mem.indexOf(u8, failed.stderr, "template:") != null);
+    try std.testing.expectEqualStrings(previous, try run.readFile("site/about.html"));
+    try run.expectNoTempFiles("site");
+}
+
+test "build script: output-limit failure leaves the page byte-identical" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.scaffoldSite();
+    const first = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(first, 0);
+    const previous = try run.readFile("site/index.html");
+
+    // The output limit reaches the build script through its DOGBED
+    // interface: a wrapper script that appends --max-output.
+    const wrapper = try std.fmt.allocPrint(run.arena_state.allocator(), "#!/bin/sh\nexec \"{s}\" \"$@\" --max-output 200\n", .{build_options.dogbed_exe});
+    try run.tmp.dir.writeFile(std.testing.io, .{ .sub_path = "capped-dogbed", .data = wrapper, .flags = .{ .permissions = .executable_file } });
+    const failed = try run.runBuild("./capped-dogbed");
+    try run.expectExited(failed, 1);
+    try std.testing.expect(std.mem.indexOf(u8, failed.stderr, "exceeded") != null or std.mem.indexOf(u8, failed.stderr, "exceeds") != null);
+    try std.testing.expectEqualStrings(previous, try run.readFile("site/index.html"));
+    try run.expectNoTempFiles("site");
+}
+
+test "build script: a first-time failed render does not install a partial page" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.scaffoldSite();
+    try run.writeFile("data/index.json", "{broken JSON\n");
+
+    const failed = try run.runBuild(build_options.dogbed_exe);
+    try run.expectExited(failed, 1);
+    // The route that failed first has no page at all — not an empty file.
+    try std.testing.expectError(error.FileNotFound, run.readFile("site/index.html"));
+    try run.expectNoTempFiles("site");
+}
+
+test "init: the safe-output build.sh supersedes the v1 scaffold script, modified ones are kept" {
+    const v1 = for (scaffold.files) |f| {
+        if (std.mem.eql(u8, f.path, "build.sh")) break f;
+    } else unreachable;
+    const old_bytes = v1.supersedes.?;
+
+    // An unmodified v1 build.sh is the scaffold's own file: archived, then
+    // replaced by the safe-output script.
+    var run = BuildRun.start();
+    defer run.deinit();
+    try run.tmp.dir.createDirPath(std.testing.io, "src");
+    try run.writeFile("build.sh", old_bytes);
+    var out_buf = std.Io.Writer.Allocating.init(run.arena_state.allocator());
+    var err_buf = std.Io.Writer.Allocating.init(run.arena_state.allocator());
+    try cli.scaffoldSite(run.tmp.dir, std.testing.io, run.arena_state.allocator(), &out_buf.writer, &err_buf.writer, &scaffold.dirs, &scaffold.files);
+    try std.testing.expect(std.mem.indexOf(u8, out_buf.written(), "archived build.sh -> ") != null);
+    try std.testing.expectEqualStrings(v1.content, try run.readFile("build.sh"));
+
+    // A modified build.sh is the user's now: kept byte-identical.
+    var run2 = BuildRun.start();
+    defer run2.deinit();
+    try run2.writeFile("build.sh", "#!/bin/sh\n# mine, not the scaffold's\n");
+    var out2 = std.Io.Writer.Allocating.init(run2.arena_state.allocator());
+    var err2 = std.Io.Writer.Allocating.init(run2.arena_state.allocator());
+    try cli.scaffoldSite(run2.tmp.dir, std.testing.io, run2.arena_state.allocator(), &out2.writer, &err2.writer, &scaffold.dirs, &scaffold.files);
+    try std.testing.expect(std.mem.indexOf(u8, out2.written(), "kept     build.sh (modified since it was scaffolded") != null);
+    try std.testing.expectEqualStrings("#!/bin/sh\n# mine, not the scaffold's\n", try run2.readFile("build.sh"));
+}
+
+/// Copies `docs/src`, `docs/data`, and `docs/assets` from the repo into
+/// `<tmp>/docs/`, plus build.sh itself, so the docs build can run in a
+/// scratch site without touching the working tree.
+fn copyDocsTree(run: *BuildRun) !void {
+    const alloc = run.arena_state.allocator();
+    const repo = std.Io.Dir.cwd();
+    const subdirs = [_][]const u8{ "src", "data", "assets" };
+    for (subdirs) |sub| {
+        const src_path = try std.fmt.allocPrint(alloc, "{s}/docs/{s}", .{ build_options.repo_root, sub });
+        var src = try repo.openDir(std.testing.io, src_path, .{ .iterate = true });
+        defer src.close(std.testing.io);
+        const dest_sub = try std.fmt.allocPrint(alloc, "docs/{s}", .{sub});
+        try run.tmp.dir.createDirPath(std.testing.io, dest_sub);
+        var it = src.iterate();
+        while (try it.next(std.testing.io)) |entry| {
+            if (entry.kind != .file) continue;
+            const src_file = try std.fmt.allocPrint(alloc, "docs/{s}/{s}", .{ sub, entry.name });
+            const src_bytes = try repo.readFileAlloc(std.testing.io, src_file, alloc, .limited(16 * 1024 * 1024));
+            const dest_file = try std.fmt.allocPrint(alloc, "{s}/{s}", .{ dest_sub, entry.name });
+            try run.writeFile(dest_file, src_bytes);
+        }
+    }
+    const script = try std.fmt.allocPrint(alloc, "{s}/docs/build.sh", .{build_options.repo_root});
+    const script_bytes = try repo.readFileAlloc(std.testing.io, script, alloc, .limited(1 << 20));
+    try run.tmp.dir.writeFile(std.testing.io, .{ .sub_path = "docs/build.sh", .data = script_bytes, .flags = .{ .permissions = .executable_file } });
+}
+
+test "docs build script: rebuilds the committed site byte-identically" {
+    var run = BuildRun.start();
+    defer run.deinit();
+    try copyDocsTree(&run);
+
+    // build.sh cds to the repo root relative to itself, so the script runs
+    // from the tmp copy with DOGBED pointing at the fresh binary.
+    const alloc = run.arena_state.allocator();
+    var env = std.process.Environ.Map.init(alloc);
+    switch (@import("builtin").os.tag) {
+        .windows => try env.putWindowsBlock(std.testing.environ.block.view()),
+        else => try env.putPosixBlock(std.testing.environ.block.view()),
+    }
+    try env.put("DOGBED", build_options.dogbed_exe);
+    const result = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ "sh", "docs/build.sh" },
+        .cwd = .{ .dir = run.tmp.dir },
+        .environ_map = &env,
+    });
+    try run.expectExited(result, 0);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "rendered: index") != null);
+
+    // Every committed page comes back byte-identical from the fresh build:
+    // the safe-output script changed how pages land, not what they contain.
+    const repo = std.Io.Dir.cwd();
+    const site_path = try std.fmt.allocPrint(alloc, "{s}/docs/site", .{build_options.repo_root});
+    var site = try repo.openDir(std.testing.io, site_path, .{ .iterate = true });
+    defer site.close(std.testing.io);
+    var it = site.iterate();
+    var pages: usize = 0;
+    while (try it.next(std.testing.io)) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.name, ".html")) continue;
+        const committed = try repo.readFileAlloc(std.testing.io, try std.fmt.allocPrint(alloc, "docs/site/{s}", .{entry.name}), alloc, .limited(4 * 1024 * 1024));
+        const rebuilt = try run.readFile(try std.fmt.allocPrint(alloc, "docs/site/{s}", .{entry.name}));
+        try std.testing.expectEqualStrings(committed, rebuilt);
+        pages += 1;
+    }
+    try std.testing.expect(pages >= 6);
+    try run.expectNoTempFiles("docs/site");
+}

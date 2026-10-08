@@ -13,8 +13,11 @@ pub fn build(b: *std.Build) void {
     // is: the tests run the real binary through the real build scripts
     // (scaffold + docs), which need both. The test step depends on the
     // install below, so the binary exists and is fresh whenever tests run.
-    build_options.addOption([]const u8, "dogbed_exe", b.getInstallPath(.bin, exe_name));
-    build_options.addOption([]const u8, "repo_root", b.build_root.path orelse ".");
+    // dogbed_exe resolves at make time so a --prefix override is honored —
+    // it may come back build-root-relative; the tests join it onto
+    // repo_root, which is absolute.
+    build_options.addOptionPathUntracked("dogbed_exe", b.graph.path(.install_bin, exe_name));
+    build_options.addOption([]const u8, "repo_root", buildRootAbs(b));
     const build_options_mod = build_options.createModule();
 
     const k4o_dep = b.dependency("k4o", .{
@@ -83,6 +86,18 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run the test suite");
     test_step.dependOn(&run_tests.step);
     test_step.dependOn(&install_exe.step);
+}
+
+/// The absolute path of the build root. `b.root` carries no path at all
+/// when the project root is the process cwd, so ask the open handle for
+/// its canonical path instead.
+fn buildRootAbs(b: *std.Build) []const u8 {
+    if (b.root.root_dir.path) |p| {
+        if (std.Io.Dir.path.isAbsolute(p)) return b.dupe(p);
+    }
+    var buf: [std.Io.Dir.max_path_bytes]u8 = undefined;
+    const n = b.root.root_dir.handle.realPath(b.graph.io, &buf) catch return ".";
+    return b.dupe(buf[0..n]);
 }
 
 /// Reads `.version = "..."` from build.zig.zon at configure time (single

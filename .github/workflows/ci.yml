@@ -11,9 +11,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Zig 0.16.0
+      - name: Install Zig 0.17.0
         run: |
-          curl -sL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          curl -sL -o /tmp/zig.tar.xz https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
           mkdir -p /tmp/zig && tar -xf /tmp/zig.tar.xz -C /tmp/zig --strip-components=1
           echo "/tmp/zig" >> "$GITHUB_PATH"
 
@@ -28,9 +28,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Zig 0.16.0
+      - name: Install Zig 0.17.0
         run: |
-          curl -sL -o /tmp/zig.tar.xz https://ziglang.org/download/0.16.0/zig-x86_64-linux-0.16.0.tar.xz
+          curl -sL -o /tmp/zig.tar.xz https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz
           mkdir -p /tmp/zig && tar -xf /tmp/zig.tar.xz -C /tmp/zig --strip-components=1
           echo "/tmp/zig" >> "$GITHUB_PATH"
 

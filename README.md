@@ -94,7 +94,7 @@ dogbed init
 
 ## Building
 
-Zig 0.16.0. `zig build` produces `zig-out/bin/dogbed`; `zig build test`
+Zig 0.17.0. `zig build` produces `zig-out/bin/dogbed`; `zig build test`
 runs the suite.
 
 ## Why this exists

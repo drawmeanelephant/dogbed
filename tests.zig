@@ -9,6 +9,15 @@ const scaffold = @import("scaffold");
 const build_options = @import("build_options");
 const cli = @import("main");
 
+/// `build_options.dogbed_exe` is the make-time-resolved install path —
+/// build-root-relative for the default zig-out prefix, absolute under a
+/// `--prefix` override. Tests spawn it from scratch dirs, so absolutize it
+/// against `repo_root` when needed.
+fn dogbedExe(alloc: std.mem.Allocator) ![]const u8 {
+    if (std.Io.Dir.path.isAbsolute(build_options.dogbed_exe)) return build_options.dogbed_exe;
+    return std.fmt.allocPrint(alloc, "{s}/{s}", .{ build_options.repo_root, build_options.dogbed_exe });
+}
+
 test "pipeline: knap template renders through textile to html" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
@@ -515,7 +524,7 @@ test "max-output: html escaping expansion trips during the html stage" {
         // The issue's repro shape: ~1 KiB of Textile passes the k4o stage,
         // escaping expands it past 4 KiB of HTML.
         const template = "{{ body }}\n";
-        const data = "{\"body\":\"" ++ "&" ** 1000 ++ "\"}";
+        const data = "{\"body\":\"" ++ @as([1000]u8, @splat('&')) ++ "\"}";
         const trip = try renderBounded(alloc, template, data, profile, 4096, null, &.{}, &.{}, null);
         try std.testing.expectEqual(Trip.html_stage, trip);
     }
@@ -526,7 +535,7 @@ test "max-output: the html stage stops storing at the cap" {
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
 
-    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, "{\"body\":\"" ++ "&" ** 1000 ++ "\"}", .{});
+    const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, "{\"body\":\"" ++ @as([1000]u8, @splat('&')) ++ "\"}", .{});
     var d = kt.Diagnostic{};
     const textile = try kt.renderWithLimit(alloc, "{{ body }}\n", parsed, &d, 4096);
     var result = try oliver.parse(alloc, textile, .textile, .{});
@@ -554,16 +563,16 @@ test "max-output: shell overhead trips during shell assembly, both profiles" {
         // (a) escaped title text: 40 & escape into 200 bytes of &amp;
         try std.testing.expectError(
             error.OutputLimitExceeded,
-            cli.wrapDocument(alloc, fragment, "&" ** 40, &.{}, &.{}, null, profile, 100),
+            cli.wrapDocument(alloc, fragment, &@as([40]u8, @splat('&')), &.{}, &.{}, null, profile, 100),
         );
         // (b) repeated css entries
-        const css8 = &([1][]const u8{"a.css"} ** 8);
+        const css8 = &@as([8][]const u8, @splat("a.css"));
         try std.testing.expectError(
             error.OutputLimitExceeded,
             cli.wrapDocument(alloc, fragment, null, css8, &.{}, null, profile, 100),
         );
         // (c) repeated head entries
-        const head8 = &([1][]const u8{"<meta property=\"og:title\" content=\"dogbed\">"} ** 8);
+        const head8 = &@as([8][]const u8, @splat("<meta property=\"og:title\" content=\"dogbed\">"));
         try std.testing.expectError(
             error.OutputLimitExceeded,
             cli.wrapDocument(alloc, fragment, null, &.{}, head8, null, profile, 100),
@@ -616,7 +625,7 @@ test "max-output: under-limit renders stay byte-identical to unlimited" {
         const alloc = arena_state.allocator();
 
         const template = "{{ title | h1 }}\n\n{{ body }}\n";
-        const data = "{\"title\":\"T & U\",\"body\":\"" ++ "&" ** 200 ++ "\"}";
+        const data = "{\"title\":\"T & U\",\"body\":\"" ++ @as([200]u8, @splat('&')) ++ "\"}";
         // Bare fragment.
         const bare = try renderBounded(alloc, template, data, profile, 0, null, &.{}, &.{}, null);
         const bare_capped = try renderBounded(alloc, template, data, profile, 1 << 20, null, &.{}, &.{}, null);
@@ -634,7 +643,7 @@ test "max-output: zero cap retains the documented unlimited semantics" {
     const alloc = arena_state.allocator();
 
     const template = "{{ body }}\n{{ body }}\n{{ body }}\n";
-    const data = "{\"body\":\"" ++ "&" ** 100000 ++ "\"}";
+    const data = "{\"body\":\"" ++ @as([100000]u8, @splat('&')) ++ "\"}";
     const trip = try renderBounded(alloc, template, data, .html, 0, null, &.{}, &.{}, null);
     // ~1.5 MB of escaped HTML renders fine with no cap.
     try std.testing.expect(trip.ok.len > 1_000_000);
@@ -653,7 +662,7 @@ test "max-output: allocation failure stays distinct from a limit trip" {
     // Over the cap: the distinguishable limit error.
     try std.testing.expectError(
         error.OutputLimitExceeded,
-        cli.wrapDocument(alloc, "<p>hi</p>\n", "&" ** 100, &.{}, &.{}, null, .html, 50),
+        cli.wrapDocument(alloc, "<p>hi</p>\n", &@as([100]u8, @splat('&')), &.{}, &.{}, null, .html, 50),
     );
 }
 
@@ -737,7 +746,7 @@ test "build script: scaffold build renders every route, script executable" {
     defer run.deinit();
     try run.scaffoldSite();
 
-    const result = try run.runBuild(build_options.dogbed_exe);
+    const result = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(result, 0);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "rendered: index") != null);
     try std.testing.expect(std.mem.indexOf(u8, result.stdout, "rendered: about") != null);
@@ -750,12 +759,12 @@ test "build script: failed rebuild with malformed JSON leaves the page byte-iden
     var run = BuildRun.start();
     defer run.deinit();
     try run.scaffoldSite();
-    const first = try run.runBuild(build_options.dogbed_exe);
+    const first = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(first, 0);
     const previous = try run.readFile("site/index.html");
 
     try run.writeFile("data/index.json", "{broken JSON\n");
-    const failed = try run.runBuild(build_options.dogbed_exe);
+    const failed = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(failed, 1);
     // stderr carries the diagnostic; nothing was installed.
     try std.testing.expect(std.mem.indexOf(u8, failed.stderr, "invalid JSON") != null);
@@ -767,12 +776,12 @@ test "build script: failed rebuild with a malformed template leaves the page byt
     var run = BuildRun.start();
     defer run.deinit();
     try run.scaffoldSite();
-    const first = try run.runBuild(build_options.dogbed_exe);
+    const first = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(first, 0);
     const previous = try run.readFile("site/about.html");
 
     try run.writeFile("src/about.knap", "h1. broken\n{{ never_closed\n");
-    const failed = try run.runBuild(build_options.dogbed_exe);
+    const failed = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(failed, 1);
     try std.testing.expect(std.mem.indexOf(u8, failed.stderr, "template:") != null);
     try std.testing.expectEqualStrings(previous, try run.readFile("site/about.html"));
@@ -783,13 +792,13 @@ test "build script: output-limit failure leaves the page byte-identical" {
     var run = BuildRun.start();
     defer run.deinit();
     try run.scaffoldSite();
-    const first = try run.runBuild(build_options.dogbed_exe);
+    const first = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(first, 0);
     const previous = try run.readFile("site/index.html");
 
     // The output limit reaches the build script through its DOGBED
     // interface: a wrapper script that appends --max-output.
-    const wrapper = try std.fmt.allocPrint(run.arena_state.allocator(), "#!/bin/sh\nexec \"{s}\" \"$@\" --max-output 200\n", .{build_options.dogbed_exe});
+    const wrapper = try std.fmt.allocPrint(run.arena_state.allocator(), "#!/bin/sh\nexec \"{s}\" \"$@\" --max-output 200\n", .{try dogbedExe(run.arena_state.allocator())});
     try run.tmp.dir.writeFile(std.testing.io, .{ .sub_path = "capped-dogbed", .data = wrapper, .flags = .{ .permissions = .executable_file } });
     const failed = try run.runBuild("./capped-dogbed");
     try run.expectExited(failed, 1);
@@ -804,7 +813,7 @@ test "build script: a first-time failed render does not install a partial page" 
     try run.scaffoldSite();
     try run.writeFile("data/index.json", "{broken JSON\n");
 
-    const failed = try run.runBuild(build_options.dogbed_exe);
+    const failed = try run.runBuild(try dogbedExe(run.arena_state.allocator()));
     try run.expectExited(failed, 1);
     // The route that failed first has no page at all — not an empty file.
     try std.testing.expectError(error.FileNotFound, run.readFile("site/index.html"));
@@ -880,7 +889,7 @@ test "docs build script: rebuilds the committed site byte-identically" {
         .windows => try env.putWindowsBlock(std.testing.environ.block.view()),
         else => try env.putPosixBlock(std.testing.environ.block.view()),
     }
-    try env.put("DOGBED", build_options.dogbed_exe);
+    try env.put("DOGBED", try dogbedExe(alloc));
     const result = try std.process.run(alloc, std.testing.io, .{
         .argv = &.{ "sh", "docs/build.sh" },
         .cwd = .{ .dir = run.tmp.dir },

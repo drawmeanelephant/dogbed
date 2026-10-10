@@ -225,10 +225,13 @@ pub fn main(init: std.process.Init) !u8 {
     }
     const tpl_path = template_path orelse return usage(init, "missing template file");
 
-    const template = std.Io.Dir.readFileAlloc(.cwd(), init.io, tpl_path, arena, .limited(max_input)) catch |e| {
+    const template_bytes = std.Io.Dir.readFileAlloc(.cwd(), init.io, tpl_path, arena, .limited(max_input)) catch |e| {
         report("{s} '{s}': {s}", .{ "cannot read template file", tpl_path, @errorName(e) });
         return 1;
     };
+    // A leading UTF-8 BOM (common from Windows editors) is a file artifact,
+    // not template content — strip it before k4o sees the bytes.
+    const template = if (std.mem.startsWith(u8, template_bytes, "\xef\xbb\xbf")) template_bytes[3..] else template_bytes;
 
     var root: std.json.Value = .{ .object = .empty };
     if (data_path) |dp| {

@@ -74,6 +74,34 @@ test "pipeline: xhtml profile" {
     try std.testing.expect(std.mem.indexOf(u8, html_buf.written(), "<h1") != null);
 }
 
+test "render: a leading UTF-8 BOM in the template is stripped (issue #22)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "plain.knap", .data = "h1. Title\n" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "bom.knap", .data = "\xef\xbb\xbfh1. Title\n" });
+
+    const exe = try dogbedExe(alloc);
+    const bom = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "bom.knap" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    const plain = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "plain.knap" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, bom.term);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, plain.term);
+    // The BOM'd template renders byte-identically to the BOM-less one: an
+    // h1 heading, not a paragraph carrying an invisible U+FEFF.
+    try std.testing.expectEqualStrings(plain.stdout, bom.stdout);
+    try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "<h1>Title</h1>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "\xef\xbb\xbf") == null);
+}
+
 test "shell: no title and no css returns the fragment untouched" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

@@ -113,14 +113,12 @@ pub fn main(init: std.process.Init) !u8 {
     if (args.items.len == 0) return usage(init, "missing command");
     const first = args.items[0];
     if (std.mem.eql(u8, first, "--help") or std.mem.eql(u8, first, "-h")) {
-        try printStdout(init, usage_text);
-        return 0;
+        return printStdout(init, usage_text);
     }
     if (std.mem.eql(u8, first, "--version") or std.mem.eql(u8, first, "-v")) {
         var buf: [64]u8 = undefined;
         const text = try std.fmt.bufPrint(&buf, "dogbed {s}\n", .{build_options.version});
-        try printStdout(init, text);
-        return 0;
+        return printStdout(init, text);
     }
     if (!std.mem.eql(u8, first, "render")) {
         if (std.mem.eql(u8, first, "template")) return templateCmd(init, args.items[1..]);
@@ -143,8 +141,7 @@ pub fn main(init: std.process.Init) !u8 {
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
-            try printStdout(init, usage_text);
-            return 0;
+            return printStdout(init, usage_text);
         } else if (std.mem.eql(u8, arg, "--template") or std.mem.eql(u8, arg, "-t")) {
             i += 1;
             if (i >= args.items.len) return usage(init, "missing value for --template");
@@ -316,9 +313,9 @@ pub fn main(init: std.process.Init) !u8 {
     // render complete: emit in one write so that an error never produces
     // half-rendered output.
     var out_buf: [8192]u8 = undefined;
-    var w = std.Io.File.stdout().writer(init.io, &out_buf);
-    w.interface.writeAll(final) catch return 1;
-    w.flush() catch return 1;
+    var w = std.Io.File.stdout().writerStreaming(init.io, &out_buf);
+    w.interface.writeAll(final) catch return stdoutErr(&w);
+    w.flush() catch return stdoutErr(&w);
     return 0;
 }
 
@@ -327,24 +324,24 @@ fn initCmd(init: std.process.Init, rest: []const []const u8) !u8 {
 
     for (rest) |arg| {
         if (std.mem.eql(u8, arg, "--help") or std.mem.eql(u8, arg, "-h")) {
-            try printStdout(init, usage_text);
-            return 0;
+            return printStdout(init, usage_text);
         }
         return usage(init, "init takes no arguments (it scaffolds the current directory)");
     }
 
     var out_buf: [4096]u8 = undefined;
-    var w = std.Io.File.stdout().writer(init.io, &out_buf);
+    var w = std.Io.File.stdout().writerStreaming(init.io, &out_buf);
     var err_buf: [4096]u8 = undefined;
-    var ew = std.Io.File.stderr().writer(init.io, &err_buf);
+    var ew = std.Io.File.stderr().writerStreaming(init.io, &err_buf);
     scaffoldSite(.cwd(), init.io, arena, &w.interface, &ew.interface, &scaffold.dirs, &scaffold.files) catch |e| {
         // Flush whatever progress lines were already printed.
         w.flush() catch {};
         ew.flush() catch {};
+        if (w.err != null) return stdoutErr(&w);
         if (e == error.OutOfMemory) report("out of memory", .{});
         return 1;
     };
-    w.flush() catch return 1;
+    w.flush() catch return stdoutErr(&w);
     return 0;
 }
 
@@ -520,13 +517,11 @@ fn templateCmd(init: std.process.Init, rest: []const []const u8) !u8 {
     const name = rest[0];
     if (std.mem.eql(u8, name, "--list") or std.mem.eql(u8, name, "list")) return listTemplates(init);
     if (std.mem.eql(u8, name, "--help") or std.mem.eql(u8, name, "-h")) {
-        try printStdout(init, usage_text);
-        return 0;
+        return printStdout(init, usage_text);
     }
     for (templates.entries) |entry| {
         if (std.mem.eql(u8, entry.name, name)) {
-            try printStdout(init, entry.template);
-            return 0;
+            return printStdout(init, entry.template);
         }
     }
     var names = std.ArrayList(u8).empty;
@@ -538,13 +533,13 @@ fn templateCmd(init: std.process.Init, rest: []const []const u8) !u8 {
     return 1;
 }
 
-fn listTemplates(init: std.process.Init) !u8 {
+fn listTemplates(init: std.process.Init) u8 {
     var names_buf: [4096]u8 = undefined;
-    var w = std.Io.File.stdout().writer(init.io, &names_buf);
+    var w = std.Io.File.stdout().writerStreaming(init.io, &names_buf);
     for (templates.entries) |entry| {
-        w.interface.print("{s}\t{s}\n", .{ entry.name, entry.description }) catch return 1;
+        w.interface.print("{s}\t{s}\n", .{ entry.name, entry.description }) catch return stdoutErr(&w);
     }
-    w.flush() catch return 1;
+    w.flush() catch return stdoutErr(&w);
     return 0;
 }
 
@@ -822,11 +817,20 @@ pub const Bounded = struct {
     };
 };
 
-fn printStdout(init: std.process.Init, text: []const u8) !void {
+fn printStdout(init: std.process.Init, text: []const u8) u8 {
     var out_buf: [4096]u8 = undefined;
-    var w = std.Io.File.stdout().writer(init.io, &out_buf);
-    try w.interface.writeAll(text);
-    try w.flush();
+    var w = std.Io.File.stdout().writerStreaming(init.io, &out_buf);
+    w.interface.writeAll(text) catch return stdoutErr(&w);
+    w.flush() catch return stdoutErr(&w);
+    return 0;
+}
+
+/// Reports a failed stdout write and returns the error exit code. The
+/// writer interface only surfaces error.WriteFailed; the real errno is
+/// kept on the File.Writer.
+fn stdoutErr(w: *std.Io.File.Writer) u8 {
+    report("cannot write to stdout: {s}", .{@errorName(w.err orelse error.WriteFailed)});
+    return 1;
 }
 
 fn usage(init: std.process.Init, msg: []const u8) u8 {

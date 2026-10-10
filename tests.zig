@@ -374,6 +374,114 @@ test "init: supersede leaves a modified file alone" {
     try run.expectOut("kept     src/index.knap (modified since it was scaffolded");
 }
 
+// -- init atomicity: a failed write leaves no partial file (issue #20) --
+
+/// How many streaming file writes still succeed before every write starts
+/// failing with NoSpaceLeft — an injected disk-full.
+var writes_left_before_enospc: usize = std.math.maxInt(usize);
+var enospc_vtable: std.Io.VTable = undefined;
+var enospc_vtable_ready = false;
+
+/// `std.testing.io` with `enospcOperate` patched in: scaffoldSite sees a
+/// disk that fills up after `budget` successful file writes.
+fn diskFullIo(budget: usize) std.Io {
+    if (!enospc_vtable_ready) {
+        enospc_vtable = std.testing.io.vtable.*;
+        enospc_vtable.operate = enospcOperate;
+        enospc_vtable_ready = true;
+    }
+    writes_left_before_enospc = budget;
+    return .{ .userdata = std.testing.io.userdata, .vtable = &enospc_vtable };
+}
+
+fn enospcOperate(userdata: ?*anyopaque, operation: std.Io.Operation) std.Io.Cancelable!std.Io.Operation.Result {
+    switch (operation) {
+        .file_write_streaming => {
+            if (writes_left_before_enospc == 0) return .{ .file_write_streaming = error.NoSpaceLeft };
+            writes_left_before_enospc -= 1;
+        },
+        else => {},
+    }
+    return std.testing.io.vtable.operate(userdata, operation);
+}
+
+test "init: a write failure mid-scaffold leaves earlier files whole and no temp litter" {
+    var run = InitRun.start();
+    defer run.deinit();
+
+    // README.md lands whole; the disk fills while routes.txt is written.
+    const arena = run.arena_state.allocator();
+    var out_buf = std.Io.Writer.Allocating.init(arena);
+    var err_buf = std.Io.Writer.Allocating.init(arena);
+    const result = cli.scaffoldSite(run.tmp.dir, diskFullIo(1), arena, &out_buf.writer, &err_buf.writer, &scaffold.dirs, &scaffold.files);
+    run.out = out_buf.written();
+    run.err_out = err_buf.written();
+    try std.testing.expectError(error.ScaffoldFailed, result);
+    try run.expectErr("init: cannot write 'routes.txt': NoSpaceLeft");
+
+    // The installed file stays whole, the failed path simply doesn't exist
+    // — no truncated file and no temp litter for a re-run to keep or trip
+    // over.
+    const readme = for (scaffold.files) |f| {
+        if (std.mem.eql(u8, f.path, "README.md")) break f.content;
+    } else unreachable;
+    try run.expectFile("README.md", readme);
+    try std.testing.expectError(error.FileNotFound, run.readFile("routes.txt"));
+    var top = try run.tmp.dir.openDir(InitRun.io, ".", .{ .iterate = true });
+    defer top.close(InitRun.io);
+    var it = top.iterate();
+    while (try it.next(InitRun.io)) |entry| {
+        try std.testing.expect(
+            std.mem.eql(u8, entry.name, "README.md") or
+                std.mem.eql(u8, entry.name, "assets") or
+                std.mem.eql(u8, entry.name, "data") or
+                std.mem.eql(u8, entry.name, "src"),
+        );
+    }
+
+    // A re-run on a healthy disk repairs the scaffold; README.md is kept.
+    try run.run(&scaffold.dirs, &scaffold.files);
+    for (scaffold.files) |f| try run.expectFile(f.path, f.content);
+    try run.expectOut("kept     README.md (exists — init never overwrites)");
+}
+
+test "init: an init killed mid-write leaves the path absent, so re-init repairs it" {
+    var run = InitRun.start();
+    defer run.deinit();
+    const alloc = run.arena_state.allocator();
+
+    var env = std.process.Environ.Map.init(alloc);
+    switch (@import("builtin").os.tag) {
+        .windows => try env.putWindowsBlock(std.testing.environ.block.view()),
+        else => try env.putPosixBlock(std.testing.environ.block.view()),
+    }
+    try env.put("DOGBED", try dogbedExe(alloc));
+
+    // The issue's repro: ulimit -f kills the process with SIGXFSZ in the
+    // middle of writing the 1356-byte README.md.
+    const killed = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ "sh", "-c", "ulimit -f 1; exec \"$DOGBED\" init" },
+        .cwd = .{ .dir = run.tmp.dir },
+        .environ_map = &env,
+    });
+    try std.testing.expect(!killed.term.success());
+
+    // The old code left a truncated README.md at the path that every later
+    // init kept forever. Now the path is absent — or complete, never
+    // partial — so the re-run repairs the scaffold.
+    try std.testing.expectError(error.FileNotFound, run.readFile("README.md"));
+
+    const repaired = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ "sh", "-c", "exec \"$DOGBED\" init" },
+        .cwd = .{ .dir = run.tmp.dir },
+        .environ_map = &env,
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, repaired.term);
+    for (scaffold.files) |f| try run.expectFile(f.path, f.content);
+    const build_sh = try run.tmp.dir.statFile(InitRun.io, "build.sh", .{});
+    try std.testing.expect(@intFromEnum(build_sh.permissions) & 0o111 != 0);
+}
+
 test "scaffold: routes, files, and rendered pages all agree" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

@@ -440,20 +440,44 @@ pub fn scaffoldSite(
     }
 }
 
-/// Exclusive-creates and writes one scaffold file. Returns false when
-/// something already exists at the path (the caller decides: keep or
-/// supersede). Any other failure is reported and returned as ScaffoldFailed.
+/// Creates one scaffold file atomically: the content is written to a
+/// temporary file next to the path and installed in place only once it is
+/// complete — the same temp-then-rename pattern the scaffolded build.sh
+/// uses for rendered pages. The install never replaces: an existing path is
+/// a hard `PathAlreadyExists`, so a file that appears mid-run is still kept,
+/// and a failed or killed write leaves nothing (or a stray temp file) at
+/// the scaffold path — existence there means complete, so a re-run repairs
+/// the scaffold instead of keeping a truncated file.
+///
+/// Returns false when something already exists at the path (the caller
+/// decides: keep or supersede). Any other failure is reported and returned
+/// as ScaffoldFailed.
 fn tryCreateAndWrite(dir: std.Io.Dir, io: std.Io, f: scaffold.File, out: *std.Io.Writer, err: *std.Io.Writer) error{ ScaffoldFailed, OutOfMemory }!bool {
-    const perms: std.Io.File.Permissions = if (f.executable) .executable_file else .default_file;
-    var file = dir.createFile(io, f.path, .{ .exclusive = true, .permissions = perms }) catch |e| switch (e) {
-        error.PathAlreadyExists => return false,
-        else => return failInit(err, "cannot create '{s}': {s}", .{ f.path, @errorName(e) }),
+    // Existence is the only test — check it up front so the common kept
+    // path never pays for a temp file (a dangling symlink counts as
+    // existing, same as the old exclusive create).
+    const exists = if (dir.statFile(io, f.path, .{ .follow_symlinks = false })) |_| true else |e| switch (e) {
+        error.FileNotFound => false,
+        else => return failInit(err, "cannot stat '{s}': {s}", .{ f.path, @errorName(e) }),
     };
-    file.writeStreamingAll(io, f.content) catch |e| {
-        file.close(io);
+    if (exists) return false;
+
+    const perms: std.Io.File.Permissions = if (f.executable) .executable_file else .default_file;
+    var af = dir.createFileAtomic(io, f.path, .{ .permissions = perms }) catch |e| {
+        return failInit(err, "cannot create '{s}': {s}", .{ f.path, @errorName(e) });
+    };
+    // On any way out below — failed write, failed install, kept path — the
+    // temp file is closed and unlinked; after a successful install deinit
+    // is a no-op.
+    defer af.deinit(io);
+    af.file.writeStreamingAll(io, f.content) catch |e| {
         return failInit(err, "cannot write '{s}': {s}", .{ f.path, @errorName(e) });
     };
-    file.close(io);
+    af.link(io) catch |e| switch (e) {
+        // Appeared between the stat and the install — kept, not clobbered.
+        error.PathAlreadyExists => return false,
+        else => return failInit(err, "cannot install '{s}': {s}", .{ f.path, @errorName(e) }),
+    };
     out.print("created  {s}\n", .{f.path}) catch return error.ScaffoldFailed;
     return true;
 }

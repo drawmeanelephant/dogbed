@@ -916,3 +916,112 @@ test "docs build script: rebuilds the committed site byte-identically" {
     try std.testing.expect(pages >= 6);
     try run.expectNoTempFiles("docs/site");
 }
+
+// -- stdout: streaming writes and diagnostics (issues #19, #21) --
+
+/// Reads `file` to EOF.
+fn readAll(file: std.Io.File, alloc: std.mem.Allocator) ![]u8 {
+    var list = std.ArrayList(u8).empty;
+    var buf: [4096]u8 = undefined;
+    while (true) {
+        const n = file.readStreaming(std.testing.io, &.{&buf}) catch |e| switch (e) {
+            error.EndOfStream => break,
+            else => return e,
+        };
+        if (n == 0) break;
+        try list.appendSlice(alloc, buf[0..n]);
+    }
+    return list.items;
+}
+
+/// Spawns `argv` with stdout wired to `out` — an already-open file the
+/// children share through the fd offset, the case a positional writer
+/// clobbers — and returns the exit term and captured stderr.
+fn spawnToFile(alloc: std.mem.Allocator, argv: []const []const u8, cwd: std.Io.Dir, out: std.Io.File) !std.process.Child.Term {
+    var child = try std.process.spawn(std.testing.io, .{
+        .argv = argv,
+        .cwd = .{ .dir = cwd },
+        .stdout = .{ .file = out },
+        .stderr = .pipe,
+    });
+    const stderr = try readAll(child.stderr.?, alloc);
+    try std.testing.expectEqualStrings("", stderr);
+    return child.wait(std.testing.io); // wait closes the pipe ends
+}
+
+test "stdout: output lands at the fd offset, never clobbering a redirected file" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+    const io = std.testing.io;
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "t.knap", .data = "{{ title | h1 }}\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "a.json", .data = "{\"title\":\"AAA\"}" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "b.json", .data = "{\"title\":\"BBB\"}" });
+
+    const exe = try dogbedExe(alloc);
+    const version = try std.fmt.allocPrint(alloc, "dogbed {s}\n", .{build_options.version});
+    const runs = [_]struct { argv: []const []const u8, want: []const u8 }{
+        .{ .argv = &.{ exe, "render", "t.knap", "-d", "a.json" }, .want = "<h1>AAA</h1>\n" },
+        .{ .argv = &.{ exe, "render", "t.knap", "-d", "b.json" }, .want = "<h1>BBB</h1>\n" },
+        .{ .argv = &.{ exe, "--version" }, .want = version },
+    };
+
+    var out = try tmp.dir.createFile(io, "combined.html", .{});
+    defer out.close(io);
+    var expected = std.ArrayList(u8).empty;
+    // Bytes already in the file must survive — a nonzero starting offset
+    // is exactly where a positional writer goes wrong.
+    try out.writeStreamingAll(io, "kept\n");
+    try expected.appendSlice(alloc, "kept\n");
+    for (runs) |r| {
+        try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, try spawnToFile(alloc, r.argv, tmp.dir, out));
+        try expected.appendSlice(alloc, r.want);
+    }
+    const combined = try tmp.dir.readFileAlloc(io, "combined.html", alloc, .limited(1 << 20));
+    try std.testing.expectEqualStrings(expected.items, combined);
+}
+
+/// Spawns `argv` with stdout connected to a pipe whose read end is already
+/// closed — every stdout write fails EPIPE — and returns the exit term and
+/// captured stderr. POSIX only (the test caller skips Windows).
+fn spawnDeadStdout(alloc: std.mem.Allocator, argv: []const []const u8, cwd: std.process.Child.Cwd) !struct { term: std.process.Child.Term, stderr: []u8 } {
+    const io = std.testing.io;
+    const fds = try std.Io.Threaded.pipe2(.{});
+    const read_end: std.Io.File = .{ .handle = fds[0], .flags = .{ .nonblocking = false } };
+    read_end.close(io);
+    var child = try std.process.spawn(io, .{
+        .argv = argv,
+        .cwd = cwd,
+        .stdout = .{ .file = .{ .handle = fds[1], .flags = .{ .nonblocking = false } } },
+        .stderr = .pipe,
+    });
+    (std.Io.File{ .handle = fds[1], .flags = .{ .nonblocking = false } }).close(io);
+    const stderr = try readAll(child.stderr.?, alloc);
+    return .{ .term = try child.wait(io), .stderr = stderr }; // wait closes the pipe end
+}
+
+test "stdout: a failed write exits 1 with a one-line diagnostic, not a stack trace" {
+    if (@import("builtin").os.tag == .windows) return error.SkipZigTest;
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+    const io = std.testing.io;
+    const exe = try dogbedExe(alloc);
+
+    // The --version path used to leak the raw Zig error return trace.
+    const v = try spawnDeadStdout(alloc, &.{ exe, "--version" }, .inherit);
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, v.term);
+    try std.testing.expectEqualStrings("dogbed: cannot write to stdout: BrokenPipe\n", v.stderr);
+
+    // render used to exit 1 silently.
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(io, .{ .sub_path = "t.knap", .data = "{{ title | h1 }}\n" });
+    try tmp.dir.writeFile(io, .{ .sub_path = "a.json", .data = "{\"title\":\"AAA\"}" });
+    const r = try spawnDeadStdout(alloc, &.{ exe, "render", "t.knap", "-d", "a.json" }, .{ .dir = tmp.dir });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, r.term);
+    try std.testing.expectEqualStrings("dogbed: cannot write to stdout: BrokenPipe\n", r.stderr);
+}

@@ -102,6 +102,107 @@ test "render: a leading UTF-8 BOM in the template is stripped (issue #22)" {
     try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "\xef\xbb\xbf") == null);
 }
 
+// -- deep-nesting diagnostics (issues #23, #24) --
+
+/// JSON for `{"a": <depth>×'[' 1 <depth>×']'}` — a value nested `depth`
+/// arrays deep, the repro shape from both issues.
+fn deepJson(comptime depth: usize) []const u8 {
+    return "{\"a\":" ++ @as([depth]u8, @splat('[')) ++ "1" ++ @as([depth]u8, @splat(']')) ++ "}";
+}
+
+test "render: interpolating a value nested past 256 levels is a clean error, not a panic (issue #23)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "val.knap", .data = "{{ a }}\n" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(300) });
+
+    const result = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ try dogbedExe(alloc), "render", "val.knap", "-d", "deep.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    // Exit 1 — not a signal: the k4o stage reports through the template
+    // diagnostic path instead of crashing inside std.json.Stringify.
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, result.term);
+    try std.testing.expectEqual(@as(usize, 0), result.stdout.len);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "template:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "value nested too deeply to serialize") != null);
+    // One-line diagnostic; stderr carries no panic trace.
+    const stderr = std.mem.trimEnd(u8, result.stderr, "\n");
+    try std.testing.expect(std.mem.indexOfScalar(u8, stderr, '\n') == null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "panic") == null);
+}
+
+test "render: interpolating a value nested exactly 256 levels still renders (issue #23 boundary)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "val.knap", .data = "{{ a }}\n" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(256) });
+
+    const result = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ try dogbedExe(alloc), "render", "val.knap", "-d", "deep.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, result.term);
+    try std.testing.expect(result.stdout.len > 0);
+}
+
+test "render: a comparison nested past 128 levels is a clean error, not a wrong answer (issue #24)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "self.knap",
+        .data = "{% if a == a %}same{% else %}diff{% endif %}\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(129) });
+
+    const result = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ try dogbedExe(alloc), "render", "self.knap", "-d", "deep.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    // Exit 1 with a diagnostic — the old behavior rendered "diff", silently
+    // deciding a value nested past 128 levels does not equal itself.
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, result.term);
+    try std.testing.expectEqual(@as(usize, 0), result.stdout.len);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "template:") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "comparison nested too deeply to evaluate") != null);
+    const stderr = std.mem.trimEnd(u8, result.stderr, "\n");
+    try std.testing.expect(std.mem.indexOfScalar(u8, stderr, '\n') == null);
+}
+
+test "render: a comparison nested exactly 128 levels still answers correctly (issue #24 boundary)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "self.knap",
+        .data = "{% if a == a %}same{% else %}diff{% endif %}\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(128) });
+
+    const result = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ try dogbedExe(alloc), "render", "self.knap", "-d", "deep.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, result.term);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "same") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stdout, "diff") == null);
+}
+
 test "shell: no title and no css returns the fragment untouched" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

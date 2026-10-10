@@ -6,8 +6,8 @@
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .k4o = .{
-            .url = "https://github.com/drawmeanelephant/k4o/archive/5bafcebe3128b9c8dbd211607332aaa13a668029.tar.gz",
-            .hash = "k4o-0.1.0-amsOnki5BABDMe5CkBA2EO6t-dmRkJp9Dleldui0ffqm",
+            .url = "https://github.com/drawmeanelephant/k4o/archive/d1ab0ab2e6635b96d19beb6020a1dba96c225082.tar.gz",
+            .hash = "k4o-0.1.0-amsOniVZBQAjVMTvqOX_l57slQbC3OeyEl4EF7kmvPKB",
         },
         .oliver = .{
             .url = "https://github.com/drawmeanelephant/oliver/archive/2a0a1e90d2e259e4189940d16b3907e8a82196b1.tar.gz",

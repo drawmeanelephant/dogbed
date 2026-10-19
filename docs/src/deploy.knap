@@ -1,6 +1,7 @@
-{# deploy.knap — data: title, intro_p, loop_p, loop_tr, gate_p, fail_tr,
-   setup_p, secrets_tr, workflow_p, workflow_tr, rollback_p, rollback_steps,
-   rollback_cmd, first_p, first_tr, live_p, live_tr, nav #}{{ title | h1 }}
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html" class="here">deploy</a></nav></div>
+<div class="layout">
+{{ title | h1 }}
 
 {{ intro_p }}
 
@@ -8,40 +9,51 @@
 
 {{ loop_p }}
 
-{{ loop_tr | codeblock }}
+{{ loop_tr | code_block }}
 
 {{ "The reproducibility gate" | h2 }}
 
 {{ gate_p }}
 
-{{ fail_tr | codeblock }}
+{{ fail_tr | code_block }}
+
+{{ "Two hosts, one artifact" | h2 }}
+
+{{ hosts_p }}
 
 {{ "The Cloudflare setup" | h2 }}
 
 {{ setup_p }}
 
-{{ secrets_tr | codeblock }}
+{{ secrets_tr | code_block }}
 
 {{ workflow_p }}
 
-{{ workflow_tr | codeblock }}
+{{ workflow_tr | code_block }}
+
+{{ "The GitHub Pages setup" | h2 }}
+
+{{ gh_p }}
+
+{{ gh_tr | code_block }}
 
 {{ "Rollback" | h2 }}
 
 {{ rollback_p }}
 
-{{ rollback_steps | numbered }}
+{{ rollback_steps | list:numbered }}
 
-{{ rollback_cmd | codeblock }}
+{{ rollback_cmd | code_block }}
 
 {{ "The first deploy" | h2 }}
 
 {{ first_p }}
 
-{{ first_tr | codeblock }}
+{{ first_tr | code_block }}
 
 {{ live_p }}
 
-{{ live_tr | codeblock }}
-
-{{ nav }}
+{{ live_tr | code_block }}
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>

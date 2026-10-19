@@ -6,12 +6,12 @@
     .minimum_zig_version = "0.17.0",
     .dependencies = .{
         .k4o = .{
-            .url = "https://github.com/drawmeanelephant/k4o/archive/d1ab0ab2e6635b96d19beb6020a1dba96c225082.tar.gz",
-            .hash = "k4o-0.1.0-amsOniVZBQAjVMTvqOX_l57slQbC3OeyEl4EF7kmvPKB",
+            .url = "https://github.com/drawmeanelephant/k4o/archive/122f161192ee34bfad773ff6c923a150da1ad032.tar.gz",
+            .hash = "k4o-0.1.0-amsOnv-GEAD1fJ_zSQt9D0NwspTIQ2RYn9NUFk_XO34p",
         },
         .oliver = .{
-            .url = "https://github.com/drawmeanelephant/oliver/archive/2a0a1e90d2e259e4189940d16b3907e8a82196b1.tar.gz",
-            .hash = "oliver-1.1.0-LOsZkOeMKAB1o3ynv6PTycxCt3nzpYB6l_hz-J3lVvxF",
+            .url = "https://github.com/drawmeanelephant/oliver/archive/967bfdf428ff58b9b6e292d2f0d05184e929fb92.tar.gz",
+            .hash = "oliver-1.3.0-LOsZkNfiLgDKu5WFTCiU6UUqsrUM5ek_nl9HMs1s9iZ3",
         },
     },
     .paths = .{

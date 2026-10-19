@@ -31,15 +31,15 @@ pub const File = struct {
 pub const dirs = [_][]const u8{ "assets", "data", "src" };
 
 pub const files = [_]File{
-    .{ .path = "README.md", .content = @embedFile("scaffold/README.md") },
+    .{ .path = "README.md", .content = @embedFile("scaffold/README.md"), .supersedes = @embedFile("scaffold/README.md.v1") },
     .{ .path = "routes.txt", .content = @embedFile("scaffold/routes.txt") },
     .{ .path = "build.sh", .content = @embedFile("scaffold/build.sh"), .executable = true, .supersedes = @embedFile("scaffold/build.sh.v1") },
     .{ .path = "assets/style.css", .content = @embedFile("scaffold/assets/style.css") },
     .{ .path = "data/about.json", .content = @embedFile("scaffold/data/about.json") },
-    .{ .path = "data/index.json", .content = @embedFile("scaffold/data/index.json") },
-    .{ .path = "src/about.knap", .content = @embedFile("scaffold/src/about.knap") },
-    .{ .path = "src/index.knap", .content = @embedFile("scaffold/src/index.knap") },
-    .{ .path = "src/layout.knap", .content = @embedFile("scaffold/src/layout.knap") },
+    .{ .path = "data/index.json", .content = @embedFile("scaffold/data/index.json"), .supersedes = @embedFile("scaffold/data/index.json.v1") },
+    .{ .path = "src/about.knap", .content = @embedFile("scaffold/src/about.knap"), .supersedes = @embedFile("scaffold/src/about.knap.v1") },
+    .{ .path = "src/index.knap", .content = @embedFile("scaffold/src/index.knap"), .supersedes = @embedFile("scaffold/src/index.knap.v1") },
+    .{ .path = "src/layout.knap", .content = @embedFile("scaffold/src/layout.knap"), .supersedes = @embedFile("scaffold/src/layout.knap.v1") },
 };
 
 pub const archive_dirname = ".dogbed-archive";

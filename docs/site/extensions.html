@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dogbed — extensions</title>
+<link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#13100b">
+<link rel="icon" type="image/png" href="assets/oliver-favicon.png">
+<meta property="og:title" content="dogbed">
+<meta property="og:description" content="the dog builds its own docs">
+<meta property="og:image" content="https://dogbed.filed.fyi/assets/oliver-og.png">
+</head>
+<body>
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html" class="here">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+# Extensions
+<p>k4o renders Obsidian-flavored Markdown and oliver parses it natively — every extension filter lands as a real document node, not a literal marker. All demos on this page are the pipeline's own output.</p>
+<h2>Highlights and strike</h2>
+<p><code>highlight</code> wraps in <code>&lt;mark&gt;</code>, <code>strike</code> in <code>&lt;del&gt;</code> — colored highlights take a color name:</p>
+<pre><code>$ cat ex.knap
+{{ t | highlight }}
+
+{{ s | strike }}
+$ dogbed render ex.knap -d ex.json
+&lt;p&gt;&lt;mark&gt;ship it&lt;/mark&gt;&lt;/p&gt;
+&lt;p&gt;&lt;del&gt;do not ship it&lt;/del&gt;&lt;/p&gt;
+</code></pre>
+<h2>Math</h2>
+<p><code>math</code> and <code>math_block</code> emit TeX — inline <code>$…$</code>, display <code>$$…$$</code>. Oliver typesets nothing; the span is yours to hand to MathJax:</p>
+<pre><code>$ cat mx.knap
+{{ f | math }}
+
+{{ b | math_block }}
+$ dogbed render mx.knap -d mx.json
+&lt;p&gt;&lt;span class=&quot;math inline&quot;&gt;e = mc^2&lt;/span&gt;&lt;/p&gt;
+&lt;div class=&quot;math display&quot;&gt;x = (-b +- sqrt(b^2 - 4ac)) / 2a
+&lt;/div&gt;
+</code></pre>
+<h2>Callouts</h2>
+<p><code>callout</code> turns a value into an Obsidian callout — <code>&gt; [!type]</code> under the hood, a <code>callout-&lt;type&gt;</code> div on the page. Give each callout its own blank line:</p>
+<pre><code>$ cat co.knap
+{{ note | callout:&quot;note&quot; }}
+
+{{ warn | callout:&quot;warning&quot; }}
+$ dogbed render co.knap -d co.json
+&lt;div class=&quot;callout callout-note&quot;&gt;
+&lt;p&gt;the cap counts the shell too&lt;/p&gt;
+&lt;/div&gt;
+&lt;div class=&quot;callout callout-warning&quot;&gt;
+&lt;p&gt;the href passes through verbatim&lt;/p&gt;
+&lt;/div&gt;
+</code></pre>
+<h2>Task lists and footnotes</h2>
+<p><code>list:task</code> and <code>list:numbered-task</code> emit checkboxes — the list filter's four modes are <code>bullet</code>, <code>numbered</code>, <code>task</code>, <code>numbered-task</code>. Footnotes (<code>[^n]</code> + definitions) are on the same flag set:</p>
+<pre><code>$ cat tk.knap
+{{ items | list:task }}
+$ dogbed render tk.knap -d tk.json
+&lt;ul&gt;
+&lt;li&gt;&lt;input type=&quot;checkbox&quot; disabled=&quot;&quot; /&gt;done&lt;/li&gt;
+&lt;li&gt;&lt;input type=&quot;checkbox&quot; disabled=&quot;&quot; /&gt;todo&lt;/li&gt;
+&lt;/ul&gt;
+</code></pre>
+<h2>Comments, wikilinks, embeds</h2>
+<p>The quiet ones: <code>comment</code> writes an invisible <code>%%…%%</code> note into the source (it never reaches the output — the empty first paragraph below is where it was), <code>wikilink</code> emits <code>[[page]]</code> (a link by default — a consumer-side resolver can rewrite the target), and <code>embed</code> emits <code>![[x]]</code> as a placeholder span until a resolver claims it:</p>
+<pre><code>$ cat mt.knap
+{{ c | comment }}
+{{ w | wikilink }}
+{{ e | embed }}
+$ dogbed render mt.knap -d mt.json
+&lt;p&gt;
+&lt;a href=&quot;Getting%20Started&quot;&gt;Getting Started&lt;/a&gt;
+&lt;span class=&quot;embed&quot; data-embed-target=&quot;demo.knap&quot;&gt;demo.knap&lt;/span&gt;&lt;/p&gt;
+</code></pre>
+<h2>Plain text back</h2>
+<p>And the undo button: <code>escape_md</code> walks a value back to plain text — inline specials get backslash-escaped before Markdown sees them. For data you don't trust, escape first, format later:</p>
+<pre><code>$ cat esc.knap
+{{ t | escape_md }}
+$ echo '{&quot;t&quot;:&quot;a *em* and `code` and [x](http://e.com)&quot;}' | dogbed render esc.knap -d -
+&lt;p&gt;a *em* and `code` and [x](http://e.com)&lt;/p&gt;
+</code></pre>
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>
+</body>
+</html>

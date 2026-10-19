@@ -10,8 +10,8 @@ one template, one JSON file:
 - `routes.txt` — the route table: one line per page, `name<TAB>page title`.
 - `src/` — one Knap template per route. `src/layout.knap` is the page frame
   new pages start from (knap has no includes, so a page owns its frame).
-- `data/` — one JSON object per route. Strings may carry Textile inline:
-  *bold*, _italic_, @code@, "label":target.
+- `data/` — one JSON object per route. Strings may carry Markdown inline:
+  **bold**, *italic*, `code`, [label](target).
 - `assets/` — static files, copied into `site/` by build.sh.
 - `build.sh` — the wiring: renders every route in routes.txt.
 

@@ -4,33 +4,43 @@
 <meta charset="utf-8">
 <title>dogbed — a document compiler</title>
 <link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#13100b">
 <link rel="icon" type="image/png" href="assets/oliver-favicon.png">
 <meta property="og:title" content="dogbed">
 <meta property="og:description" content="the dog builds its own docs">
 <meta property="og:image" content="https://dogbed.filed.fyi/assets/oliver-og.png">
 </head>
 <body>
-<p><img src="assets/oliver-dogbed.webp" alt="A cartoon Weimaraner asleep on a plush round dog bed, tucked under an orange cape like a blanket. An HTML5 shield is embroidered on the bed, and a matching HTML5 tag hangs from his collar" title="A cartoon Weimaraner asleep on a plush round dog bed, tucked under an orange cape like a blanket. An HTML5 shield is embroidered on the bed, and a matching HTML5 tag hangs from his collar" /></p>
-<h1>dogbed — a document compiler</h1>
-<p>dogbed is a document compiler, not a CMS: a Knap template plus a JSON object goes in, an HTML document comes out. One static binary, no runtime, no JavaScript, no database, no edit button. k4o does the templating, oliver does the rendering, dogbed joins the halves.</p>
-<h2>The pipeline</h2>
-<pre><code>template.knap + data.json --k4o--&gt; Textile --oliver--&gt; HTML
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html" class="here">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+<div class="hero"><div class="kicker">document compiler · not a CMS</div>
+<h1>dog<span class="em">bed</span><br>the dog builds its own docs</h1>
+<p class="sub">A Knap template plus a JSON object goes in, a finished HTML document comes out. One static binary — no runtime, no JavaScript, no database, no edit button.</p>
+<div class="cta"><a class="primary" href="cli.html">the CLI</a><a class="ghost" href="https://github.com/drawmeanelephant/dogbed">github</a></div>
+<img src="assets/oliver-dogbed.webp" alt="oliver the Weimaraner in an orange HTML5 cape, asleep on a dog bed"></div>
+<pre><code>template.knap + data.json --k4o--&gt; Markdown --oliver--&gt; HTML
 </code></pre>
+<div class="grid"><div class="card"><h3><span class="ic">01</span> two halves</h3><p>k4o templates, oliver renders — dogbed joins data and document in one binary.</p></div>
+<div class="card"><h3><span class="ic">02</span> knap-faithful</h3><p>The knap-0.6.0 engine: loops, conditions, filters, typed values — spec first.</p></div>
+<div class="card"><h3><span class="ic">03</span> pipe-friendly</h3><p>stdin in, stdout out, exit codes like a compiler. Errors never half-emit.</p></div>
+<div class="card"><h3><span class="ic">04</span> extensions</h3><p>Highlights, math, callouts, task lists, footnotes — Oliver 1.3 parses them natively.</p></div></div>
 <h2>Install</h2>
-<p>Grab a static binary from the <a href="https://github.com/drawmeanelephant/dogbed/releases">releases page</a>, or build from source — Zig 0.16.0 and <code>zig build</code> gives you <code>zig-out/bin/dogbed</code>.</p>
+<p>Grab a static binary from the <a href="https://github.com/drawmeanelephant/dogbed/releases">releases page</a>, or build from source — Zig 0.17.0 and <code>zig build</code> gives you <code>zig-out/bin/dogbed</code>.</p>
 <h2>Quickstart</h2>
-<p>Print the verdict starter and keep it — you own it now. Blank lines are shown as ··· — the codeblock filter cannot hold empty lines (fourth finding on the <a href="dogfood.html">dogfood page</a>):</p>
+<p>Print the verdict starter and keep it — you own it now:</p>
 <pre><code>{{ title | h1 }}
-···
+
 {{ verdict | bold }} — {{ summary }}
-···
+
 {{ &quot;Blockers&quot; | h2 }}
-···
+
 {{ blockers | list }}
-···
+
 {{ &quot;Nits&quot; | h2 }}
-···
-{{ nits | numbered }}
+
+{{ nits | list:numbered }}
 </code></pre>
 <p>Feed it data. This is the starter example:</p>
 <pre><code>{&quot;blockers&quot;:[],&quot;nits&quot;:[&quot;ship it&quot;],&quot;summary&quot;:&quot;the pipeline sings&quot;,&quot;title&quot;:&quot;dogbed 0.1.0 — first verdict&quot;,&quot;verdict&quot;:&quot;approve&quot;}
@@ -43,9 +53,11 @@
 &lt;ol&gt;
 &lt;li&gt;ship it&lt;/li&gt;
 &lt;/ol&gt;
+
 </code></pre>
-<p>That block is the entire output — a bare HTML fragment, ready to pipe into something bigger. Add <code>--title</code> or <code>--css</code> and dogbed finishes the document for you. Keep reading: the <a href="shell.html">document shell</a>, the <a href="templates.html">starter templates</a>, the <a href="contract.html">CLI contract</a>, the <a href="dogfood.html">dogfood story</a>, and the <a href="deploy.html">publishing pipeline</a> that ships it all.</p>
-<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a> · <a href="deploy.html">deploy</a><br />
-<img src="assets/oliver-badge.webp" alt="rendered by oliver" title="rendered by oliver" /></p>
+<p>That block is the entire output — a bare HTML fragment, ready to pipe into something bigger. Add <code>--title</code> or <code>--css</code> and dogbed finishes the document for you. Keep reading: <a href="cli.html">the CLI</a>, <a href="templates.html">knap templates</a>, <a href="extensions.html">extensions</a>, <a href="shell.html">the document shell</a>, <a href="dogfood.html">the dogfood story</a>, and <a href="deploy.html">the publishing pipeline</a>.</p>
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>
 </body>
 </html>

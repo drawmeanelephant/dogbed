@@ -4,13 +4,18 @@
 <meta charset="utf-8">
 <title>dogbed — the document shell</title>
 <link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#13100b">
 <link rel="icon" type="image/png" href="assets/oliver-favicon.png">
 <meta property="og:title" content="dogbed">
 <meta property="og:description" content="the dog builds its own docs">
 <meta property="og:image" content="https://dogbed.filed.fyi/assets/oliver-og.png">
 </head>
 <body>
-<h1>The document shell</h1>
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html" class="here">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+# The document shell
 <p>By default <code>render</code> emits a bare HTML fragment — ready to pipe into something bigger. Passing <code>--title</code>, <code>--css</code>, <code>--head</code> or <code>--lang</code> switches the output to a finished document: the same fragment wrapped in a minimal HTML shell. With no flags the fragment is byte-identical to what oliver rendered alone.</p>
 <p>A bare fragment — no shell flags:</p>
 <pre><code>$ dogbed render share/verdict.knap -d share/verdict.json
@@ -21,11 +26,13 @@
 &lt;ol&gt;
 &lt;li&gt;ship it&lt;/li&gt;
 &lt;/ol&gt;
+
 </code></pre>
 <h2><code>--title</code></h2>
 <p><code>--title</code> wraps the fragment in the shell and sets <code>&lt;title&gt;</code>. The text is HTML-escaped for <code>&amp;</code>, <code>&lt;</code>, <code>&gt;</code> and <code>&quot;</code> — the data is untrusted:</p>
 <pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --title 'Art &amp; &quot;Code&quot; &lt;review&gt;' | grep '&lt;title&gt;'
 &lt;title&gt;Art &amp;amp; &amp;quot;Code&amp;quot; &amp;lt;review&amp;gt;&lt;/title&gt;
+
 </code></pre>
 <h2><code>--css</code></h2>
 <p><code>--css</code> adds a stylesheet link to the shell. Repeatable — links keep flag order — and the href passes through verbatim: URL or relative path, unvalidated. The consumer owns it.</p>
@@ -48,6 +55,7 @@
 &lt;/ol&gt;
 &lt;/body&gt;
 &lt;/html&gt;
+
 </code></pre>
 <h2><code>--profile xhtml</code></h2>
 <p><code>--profile xhtml</code> swaps the HTML5 shell for XHTML 1.0 Strict: strict doctype, an http-equiv meta instead of <code>&lt;meta charset&gt;</code> (which is invalid XHTML), self-closing <code>&lt;link … /&gt;</code> tags, and <code>xmlns</code> on the root element.</p>
@@ -69,13 +77,15 @@
 &lt;/ol&gt;
 &lt;/body&gt;
 &lt;/html&gt;
+
 </code></pre>
 <h2><code>--lang</code></h2>
-<p><code>--lang</code> sets the document language on the shell’s root element — what screen readers pick pronunciation rules from (WCAG 3.1.1, Level A). HTML5 gets <code>lang</code>; XHTML also gets <code>xml:lang</code>. The tag passes through verbatim, so pick a valid BCP 47 tag: <code>en</code>, <code>pt-BR</code>.</p>
+<p><code>--lang</code> sets the document language on the shell's root element — what screen readers pick pronunciation rules from (WCAG 3.1.1, Level A). HTML5 gets <code>lang</code>; XHTML also gets <code>xml:lang</code>. The tag passes through verbatim, so pick a valid BCP 47 tag: <code>en</code>, <code>pt-BR</code>.</p>
 <pre><code>$ dogbed render share/verdict.knap -d share/verdict.json --lang en --title 'Verdict — dogbed' | head -3
 &lt;!DOCTYPE html&gt;
 &lt;html lang=&quot;en&quot;&gt;
 &lt;head&gt;
+
 </code></pre>
 <h2><code>--max-output</code></h2>
 <p><code>--max-output</code> caps the final document — shell included. Every output stage is bounded by the same value, so a runaway template or an escaping-heavy body dies the moment a write would cross the cap: over-limit output is never materialized. An emitted-byte ceiling is not a memory or CPU sandbox — embedders still need timeouts, concurrency limits, and OS-level resource controls:</p>
@@ -83,19 +93,25 @@
 dogbed: output exceeds --max-output (250)
 </code></pre>
 <h2>Data gotchas (dogfood)</h2>
-<p>Dogfood finding: Textile typography eats <code>--</code> in data. A JSON value containing <code>--title</code> renders as <code>—title</code> — the value flows through the Textile intermediate, and Textile converts <code>--</code> to an em-dash. Surprising for CLI flags and technical content; plan around it:</p>
-<pre><code>$ echo '{&quot;flag&quot;:&quot;--title&quot;}' | dogbed render flag.knap -d -
-&lt;p&gt;—title&lt;/p&gt;
+<p>Dogfood finding: data strings are Markdown source — <code>*</code>, backticks and <code>[label](url)</code> in a value render live. Mostly that is what you want; occasionally it eats characters you meant literally:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;a *em* and `code` and [x](http://e.com)&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;a &lt;em&gt;em&lt;/em&gt; and &lt;code&gt;code&lt;/code&gt; and &lt;a href=&quot;http://e.com&quot;&gt;x&lt;/a&gt;&lt;/p&gt;
+
 </code></pre>
-<p>Dogfood finding: backticks are not code spans. Markdown habits produce literal backticks — Textile code spans are <code>…</code>:</p>
-<pre><code>$ echo '{&quot;t&quot;:&quot;try `backticks` for code&quot;}' | dogbed render note.knap -d -
-&lt;p&gt;try `backticks` for code&lt;/p&gt;
+<p>Dogfood finding: block markers count too — a value that opens with <code># </code> renders as a heading, <code>&gt; </code> as a quote. Markdown owns the whole stream, top to bottom:</p>
+<pre><code>$ echo '{&quot;t&quot;:&quot;# looks like a heading&quot;}' | dogbed render note.knap -d -
+&lt;h1&gt;looks like a heading&lt;/h1&gt;
+
 </code></pre>
-<p>The fix: wrap flags in <code>…</code> spans — the code span protects the dashes:</p>
-<pre><code>$ echo '{&quot;t&quot;:&quot;wrap flags in @--title@ and Textile leaves them alone&quot;}' | dogbed render note.knap -d -
-&lt;p&gt;wrap flags in &lt;code&gt;--title&lt;/code&gt; and Textile leaves them alone&lt;/p&gt;
+<p>The fix: the <code>escape_md</code> filter walks a value back to plain text — inline specials get backslash-escaped before Markdown ever sees them:</p>
+<pre><code>$ cat note.knap
+{{ t | escape_md }}
+$ echo '{&quot;t&quot;:&quot;a *em* and `code` and [x](http://e.com)&quot;}' | dogbed render note.knap -d -
+&lt;p&gt;a *em* and `code` and [x](http://e.com)&lt;/p&gt;
+
 </code></pre>
-<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a> · <a href="deploy.html">deploy</a><br />
-<img src="assets/oliver-badge.webp" alt="rendered by oliver" title="rendered by oliver" /></p>
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>
 </body>
 </html>

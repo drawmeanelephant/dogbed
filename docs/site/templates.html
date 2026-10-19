@@ -2,58 +2,56 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>dogbed — starter templates</title>
+<title>dogbed — knap templates</title>
 <link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#13100b">
 <link rel="icon" type="image/png" href="assets/oliver-favicon.png">
 <meta property="og:title" content="dogbed">
 <meta property="og:description" content="the dog builds its own docs">
 <meta property="og:image" content="https://dogbed.filed.fyi/assets/oliver-og.png">
 </head>
 <body>
-<h1>Starter templates</h1>
-<p>Three starters ship inside the binary — no fetching, no discovery paths. <code>dogbed template &lt;name&gt;</code> prints one to stdout so you copy it and own it. <code>--list</code> (or a bare <code>dogbed template</code>) shows the names:</p>
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html" class="here">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+# Knap templates
+<p>Three starters ship inside the binary — no fetching, no discovery paths. <code>dogbed template &lt;name&gt;</code> prints one to stdout so you copy it and own it; <code>--list</code> shows the names:</p>
 <pre><code>$ dogbed template --list
 verdict	PR review verdict: blockers, nits, summary.
 release-notes	Release notes: highlights, breaking, added, changed, fixed.
 reading-note	Reading note: author, rating, quote, notes.
+
 </code></pre>
 <h2>The three starters</h2>
-<p><code>verdict</code> — a PR review verdict: blockers, nits, summary. Example data in <code>share/verdict.json</code>.</p>
-<p><code>release-notes</code> — release notes: highlights, breaking changes, added, changed, fixed, a changelog link. Every section is guarded with <code>{% if %}</code> — empty data makes the section disappear.</p>
-<p><code>reading-note</code> — a reading note: author, source link, rating, quote, notes. Everything but the title is optional.</p>
-<h2>The round trip</h2>
-<p>The whole round trip — print a starter, render it with the document shell:</p>
-<pre><code>$ dogbed template release-notes &gt; release-notes.knap
-$ dogbed render release-notes.knap -d share/release-notes.json --title 'dogbed 0.2.0' --css style.css
-&lt;!DOCTYPE html&gt;
-&lt;html&gt;
-&lt;head&gt;
-&lt;meta charset=&quot;utf-8&quot;&gt;
-&lt;title&gt;dogbed 0.2.0&lt;/title&gt;
-&lt;link rel=&quot;stylesheet&quot; href=&quot;style.css&quot;&gt;
-&lt;/head&gt;
-&lt;body&gt;
-&lt;h1&gt;dogbed 0.2.0&lt;/h1&gt;
-&lt;p&gt;0.2.0 — 2026-09-29&lt;/p&gt;
-&lt;h2&gt;Highlights&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;an optional HTML document shell (title and stylesheet flags)&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2&gt;Added&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;dogbed template &amp;lt;name&amp;gt; prints an embedded starter template&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2&gt;Changed&lt;/h2&gt;
-&lt;ul&gt;
-&lt;li&gt;the output cap now covers the final document, shell included&lt;/li&gt;
-&lt;/ul&gt;
-&lt;h2&gt;Changelog&lt;/h2&gt;
-&lt;p&gt;&lt;a href=&quot;https://github.com/drawmeanelephant/dogbed/releases&quot;&gt;Full changelog&lt;/a&gt;&lt;/p&gt;
-&lt;/body&gt;
-&lt;/html&gt;
+<ul>
+<li><code>verdict</code> — a PR review verdict: blockers, nits, summary. Example data in <code>share/verdict.json</code>.</li>
+<li><code>release-notes</code> — highlights, breaking, added, changed, fixed, a changelog link. Every section is <code>{% if %}</code>-guarded: empty data makes the section disappear.</li>
+<li><code>reading-note</code> — author, source link, rating, quote, notes. Everything but the title is optional.</li>
+</ul>
+<h2>The knap language</h2>
+<p>The template language is Knap — <code>{{ }}</code> prints (optionally through <code>| filters</code>), <code>{% %}</code> controls (<code>if</code> / <code>for</code> / <code>else</code>), <code>{# #}</code> comments. Literal text passes through as Markdown source, so <code># </code> headings and <code>*emphasis*</code> in the template are live markup:</p>
+<pre><code>$ cat note.knap
+{{ title | h1 }}
+
+{{ verdict | bold }} — {{ summary }}
+$ dogbed render note.knap -d note.json
+&lt;h1&gt;The Machine Stops&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;essential&lt;/strong&gt; — worth the reread&lt;/p&gt;
 </code></pre>
-<p>One thing to know before filling in your own data: Textile converts <code>--</code> in values to an em-dash — see the <a href="shell.html">document shell page</a> for the details and the <code>…</code> workaround.</p>
-<p><a href="index.html">index</a> · <a href="shell.html">shell</a> · <a href="templates.html">templates</a> · <a href="contract.html">contract</a> · <a href="dogfood.html">dogfood</a> · <a href="deploy.html">deploy</a><br />
-<img src="assets/oliver-badge.webp" alt="rendered by oliver" title="rendered by oliver" /></p>
+<h2>Loops and guards</h2>
+<p>Loops iterate arrays; <code>{% if %}</code> guards whole sections — this is how release-notes drops empty sections. Keep every <code>{% %}</code> tag on its own line:</p>
+<pre><code>{% if nits %}
+{{ &quot;Nits&quot; | h2 }}
+
+{{ nits | list:numbered }}
+{% endif %}
+
+{% for x in items %}{{ x }} {% endfor %}
+</code></pre>
+<p>Before filling in your own data: data strings are Markdown source — <code>*em*</code>, <code>`code`</code> and <code>[label](url)</code> in a value render live, and a value opening with <code># </code> becomes a heading. The <code>escape_md</code> filter walks a value back to plain text. See the <a href="shell.html">document shell page</a>.</p>
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>
 </body>
 </html>

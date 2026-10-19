@@ -8,4 +8,4 @@
 
 {{ "Nits" | h2 }}
 
-{{ nits | numbered }}
+{{ nits | list:numbered }}

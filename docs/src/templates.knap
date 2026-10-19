@@ -1,24 +1,29 @@
-{# templates.knap — data: title, intro_p, list_tr, verdict_p, rn_p, note_p,
-   round_p, round_tr, gotcha_p, nav #}{{ title | h1 }}
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html" class="here">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+{{ title | h1 }}
 
 {{ intro_p }}
 
-{{ list_tr | codeblock }}
+{{ list_tr | code_block }}
 
 {{ "The three starters" | h2 }}
 
-{{ verdict_p }}
+{{ starters | list }}
 
-{{ rn_p }}
+{{ "The knap language" | h2 }}
 
-{{ note_p }}
+{{ lang_p }}
 
-{{ "The round trip" | h2 }}
+{{ lang_tr | code_block }}
 
-{{ round_p }}
+{{ "Loops and guards" | h2 }}
 
-{{ round_tr | codeblock }}
+{{ loops_p }}
+
+{{ loops_tr | code_block }}
 
 {{ gotcha_p }}
-
-{{ nav }}
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>

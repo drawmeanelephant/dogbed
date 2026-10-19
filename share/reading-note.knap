@@ -2,11 +2,12 @@
    Data: title, author, source_url, rating, quote, thoughts[]. Everything but
    the title is optional and disappears when missing; see reading-note.json. #}{{ title | h1 }}
 {% if author %}by {{ author }}{% endif %}
-{% if source_url %}{{ "source" | link:source_url }}{% endif %}
+{% if source_url %}{{ source_url | link:"source" }}{% endif %}
 {% if rating %}{{ rating | bold }}{% endif %}
 {% if quote %}
 {{ quote | blockquote }}
-{% endif %}{% if thoughts %}
+{% endif %}
+{% if thoughts %}
 {{ "Notes" | h2 }}
 
 {{ thoughts | list }}

@@ -1,5 +1,5 @@
 //! dogbed test suite: the pipeline is the product, so the smoke test runs
-//! the whole thing — Knap template + JSON --k4o--> Textile --oliver--> HTML.
+//! the whole thing — Knap template + JSON --k4o--> Markdown --oliver--> HTML.
 
 const std = @import("std");
 const kt = @import("k4o");
@@ -18,7 +18,7 @@ fn dogbedExe(alloc: std.mem.Allocator) ![]const u8 {
     return std.fmt.allocPrint(alloc, "{s}/{s}", .{ build_options.repo_root, build_options.dogbed_exe });
 }
 
-test "pipeline: knap template renders through textile to html" {
+test "pipeline: knap template renders through markdown to html" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
@@ -34,13 +34,13 @@ test "pipeline: knap template renders through textile to html" {
 
     // Stage 1: k4o.
     var d = kt.Diagnostic{};
-    const textile = try kt.render(alloc, template, parsed.value, &d);
-    try std.testing.expect(std.mem.indexOf(u8, textile, "h1. The Machine Stops") != null);
-    try std.testing.expect(std.mem.indexOf(u8, textile, "_A reading note_") != null);
+    const source = try kt.renderFormat(alloc, template, parsed.value, &d, .markdown);
+    try std.testing.expect(std.mem.indexOf(u8, source, "# The Machine Stops") != null);
+    try std.testing.expect(std.mem.indexOf(u8, source, "*A reading note*") != null);
 
-    // Stage 2: oliver. The document borrows the textile bytes, which the
+    // Stage 2: oliver. The document borrows the source bytes, which the
     // arena keeps alive past the parse result.
-    var result = try oliver.parse(alloc, textile, .textile, .{});
+    var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 
     var html_buf = std.Io.Writer.Allocating.init(alloc);
@@ -65,8 +65,8 @@ test "pipeline: xhtml profile" {
     defer parsed.deinit();
 
     var d = kt.Diagnostic{};
-    const textile = try kt.render(alloc, "{{ title | h1 }}\n", parsed.value, &d);
-    var result = try oliver.parse(alloc, textile, .textile, .{});
+    const source = try kt.renderFormat(alloc, "{{ title | h1 }}\n", parsed.value, &d, .markdown);
+    var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 
     var html_buf = std.Io.Writer.Allocating.init(alloc);
@@ -81,8 +81,8 @@ test "render: a leading UTF-8 BOM in the template is stripped (issue #22)" {
 
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "plain.knap", .data = "h1. Title\n" });
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "bom.knap", .data = "\xef\xbb\xbfh1. Title\n" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "plain.knap", .data = "# Title\n" });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "bom.knap", .data = "\xef\xbb\xbf# Title\n" });
 
     const exe = try dogbedExe(alloc);
     const bom = try std.process.run(alloc, std.testing.io, .{
@@ -110,7 +110,7 @@ fn deepJson(comptime depth: usize) []const u8 {
     return "{\"a\":" ++ @as([depth]u8, @splat('[')) ++ "1" ++ @as([depth]u8, @splat(']')) ++ "}";
 }
 
-test "render: interpolating a value nested past 256 levels is a clean error, not a panic (issue #23)" {
+test "render: interpolating a value nested past the 100-level limit is a clean error, not a panic (issue #23)" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
@@ -118,7 +118,7 @@ test "render: interpolating a value nested past 256 levels is a clean error, not
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "val.knap", .data = "{{ a }}\n" });
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(300) });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(101) });
 
     const result = try std.process.run(alloc, std.testing.io, .{
         .argv = &.{ try dogbedExe(alloc), "render", "val.knap", "-d", "deep.json" },
@@ -129,14 +129,14 @@ test "render: interpolating a value nested past 256 levels is a clean error, not
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, result.term);
     try std.testing.expectEqual(@as(usize, 0), result.stdout.len);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "template:") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "value nested too deeply to serialize") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "value nested deeper than the 100-level limit") != null);
     // One-line diagnostic; stderr carries no panic trace.
     const stderr = std.mem.trimEnd(u8, result.stderr, "\n");
     try std.testing.expect(std.mem.indexOfScalar(u8, stderr, '\n') == null);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "panic") == null);
 }
 
-test "render: interpolating a value nested exactly 256 levels still renders (issue #23 boundary)" {
+test "render: interpolating a value nested to the 100-level limit still renders (issue #23 boundary)" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
@@ -144,7 +144,7 @@ test "render: interpolating a value nested exactly 256 levels still renders (iss
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
     try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "val.knap", .data = "{{ a }}\n" });
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(256) });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(99) });
 
     const result = try std.process.run(alloc, std.testing.io, .{
         .argv = &.{ try dogbedExe(alloc), "render", "val.knap", "-d", "deep.json" },
@@ -154,7 +154,7 @@ test "render: interpolating a value nested exactly 256 levels still renders (iss
     try std.testing.expect(result.stdout.len > 0);
 }
 
-test "render: a comparison nested past 128 levels is a clean error, not a wrong answer (issue #24)" {
+test "render: a comparison on a value nested past the 100-level limit is a clean error, not a wrong answer (issue #24)" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
@@ -165,23 +165,25 @@ test "render: a comparison nested past 128 levels is a clean error, not a wrong 
         .sub_path = "self.knap",
         .data = "{% if a == a %}same{% else %}diff{% endif %}\n",
     });
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(129) });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(100) });
 
     const result = try std.process.run(alloc, std.testing.io, .{
         .argv = &.{ try dogbedExe(alloc), "render", "self.knap", "-d", "deep.json" },
         .cwd = .{ .dir = tmp.dir },
     });
     // Exit 1 with a diagnostic — the old behavior rendered "diff", silently
-    // deciding a value nested past 128 levels does not equal itself.
+    // deciding a deeply nested value does not equal itself. Comparisons
+    // now iterate at any depth, bounded by the shared 100-level value
+    // limit, so the value-depth diagnostic is the one that fires.
     try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, result.term);
     try std.testing.expectEqual(@as(usize, 0), result.stdout.len);
     try std.testing.expect(std.mem.indexOf(u8, result.stderr, "template:") != null);
-    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "comparison nested too deeply to evaluate") != null);
+    try std.testing.expect(std.mem.indexOf(u8, result.stderr, "value nested deeper than the 100-level limit") != null);
     const stderr = std.mem.trimEnd(u8, result.stderr, "\n");
     try std.testing.expect(std.mem.indexOfScalar(u8, stderr, '\n') == null);
 }
 
-test "render: a comparison nested exactly 128 levels still answers correctly (issue #24 boundary)" {
+test "render: a comparison on a value nested to the 100-level limit still answers correctly (issue #24 boundary)" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();
     const alloc = arena_state.allocator();
@@ -192,7 +194,7 @@ test "render: a comparison nested exactly 128 levels still answers correctly (is
         .sub_path = "self.knap",
         .data = "{% if a == a %}same{% else %}diff{% endif %}\n",
     });
-    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(128) });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "deep.json", .data = deepJson(99) });
 
     const result = try std.process.run(alloc, std.testing.io, .{
         .argv = &.{ try dogbedExe(alloc), "render", "self.knap", "-d", "deep.json" },
@@ -343,10 +345,10 @@ test "templates: every starter renders through the full pipeline with its exampl
 
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, entry.example_data, .{});
         var d = kt.Diagnostic{};
-        const textile = try kt.render(alloc, entry.template, parsed, &d);
-        try std.testing.expect(textile.len > 0);
+        const source = try kt.renderFormat(alloc, entry.template, parsed, &d, .markdown);
+        try std.testing.expect(source.len > 0);
 
-        var result = try oliver.parse(alloc, textile, .textile, .{});
+        var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
         defer result.deinit();
         var html_buf = std.Io.Writer.Allocating.init(alloc);
         try oliver.html.render(alloc, &html_buf.writer, &result.document, .{});
@@ -453,7 +455,9 @@ test "init: a user's file is kept byte-identical" {
     try run.run(&scaffold.dirs, &scaffold.files);
 
     try run.expectFile("README.md", "mine, not the scaffold's\n");
-    try run.expectOut("kept     README.md (exists — init never overwrites)");
+    // README.md carries a supersedes entry now, so the report is the
+    // supersede-aware kept line — the file itself is still byte-identical.
+    try run.expectOut("kept     README.md (modified since it was scaffolded — init never overwrites, not even on supersede)");
 }
 
 test "init: a directory squatting on a file path fails loudly and survives" {
@@ -642,8 +646,8 @@ test "scaffold: routes, files, and rendered pages all agree" {
 
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, data_json, .{});
         var d = kt.Diagnostic{};
-        const textile = try kt.render(alloc, knap, parsed, &d);
-        var result = try oliver.parse(alloc, textile, .textile, .{});
+        const source = try kt.renderFormat(alloc, knap, parsed, &d, .markdown);
+        var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
         defer result.deinit();
         var html_buf = std.Io.Writer.Allocating.init(alloc);
         try oliver.html.render(alloc, &html_buf.writer, &result.document, .{});
@@ -659,8 +663,8 @@ test "scaffold: routes, files, and rendered pages all agree" {
         \\{"title":"T","intro":"I","body":"B"}
     , .{});
     var d = kt.Diagnostic{};
-    const textile = try kt.render(alloc, layout, frame_data, &d);
-    var result = try oliver.parse(alloc, textile, .textile, .{});
+    const source = try kt.renderFormat(alloc, layout, frame_data, &d, .markdown);
+    var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
     var html_buf = std.Io.Writer.Allocating.init(alloc);
     try oliver.html.render(alloc, &html_buf.writer, &result.document, .{});
@@ -695,11 +699,11 @@ fn renderBounded(
 ) !Trip {
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, data_json, .{});
     var d = kt.Diagnostic{};
-    const textile = kt.renderWithLimit(alloc, template, parsed, &d, max_output) catch |e| switch (e) {
+    const source = kt.renderFormatWithLimit(alloc, template, parsed, &d, .markdown, max_output) catch |e| switch (e) {
         error.Template => return .k4o_stage,
         error.OutOfMemory => return error.OutOfMemory,
     };
-    var result = try oliver.parse(alloc, textile, .textile, .{});
+    var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 
     var html_out = cli.Bounded.init(alloc, max_output);
@@ -758,7 +762,7 @@ test "max-output: html escaping expansion trips during the html stage" {
         defer arena_state.deinit();
         const alloc = arena_state.allocator();
 
-        // The issue's repro shape: ~1 KiB of Textile passes the k4o stage,
+        // The issue's repro shape: ~1 KiB of Markdown passes the k4o stage,
         // escaping expands it past 4 KiB of HTML.
         const template = "{{ body }}\n";
         const data = "{\"body\":\"" ++ @as([1000]u8, @splat('&')) ++ "\"}";
@@ -774,8 +778,8 @@ test "max-output: the html stage stops storing at the cap" {
 
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, "{\"body\":\"" ++ @as([1000]u8, @splat('&')) ++ "\"}", .{});
     var d = kt.Diagnostic{};
-    const textile = try kt.renderWithLimit(alloc, "{{ body }}\n", parsed, &d, 4096);
-    var result = try oliver.parse(alloc, textile, .textile, .{});
+    const source = try kt.renderFormatWithLimit(alloc, "{{ body }}\n", parsed, &d, .markdown, 4096);
+    var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 
     var html_out = cli.Bounded.init(alloc, 4096);
@@ -824,7 +828,7 @@ test "max-output: html stage boundary — exact cap passes, one byte over trips"
         const alloc = arena_state.allocator();
 
         // "&" escapes to "&amp;" and lands in a paragraph —
-        // "<p>&amp;</p>\n", 11 bytes from a 1-byte Textile: the html stage
+        // "<p>&amp;</p>\n", 11 bytes from a 1-byte source: the html stage
         // owns this boundary. Exactly at the cap succeeds and is
         // byte-identical to an unlimited render; one byte under trips.
         const unlimited = try renderBounded(alloc, "{{ body }}", "{\"body\":\"&\"}", profile, 0, null, &.{}, &.{}, null);

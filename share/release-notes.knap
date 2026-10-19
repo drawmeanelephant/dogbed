@@ -7,24 +7,29 @@
 {{ "Highlights" | h2 }}
 
 {{ highlights | list }}
-{% endif %}{% if breaking %}
+{% endif %}
+{% if breaking %}
 {{ "Breaking changes" | h2 }}
 
 {{ breaking | list }}
-{% endif %}{% if added %}
+{% endif %}
+{% if added %}
 {{ "Added" | h2 }}
 
 {{ added | list }}
-{% endif %}{% if changed %}
+{% endif %}
+{% if changed %}
 {{ "Changed" | h2 }}
 
 {{ changed | list }}
-{% endif %}{% if fixed %}
+{% endif %}
+{% if fixed %}
 {{ "Fixed" | h2 }}
 
 {{ fixed | list }}
-{% endif %}{% if changelog_url %}
+{% endif %}
+{% if changelog_url %}
 {{ "Changelog" | h2 }}
 
-{{ "Full changelog" | link:changelog_url }}
+{{ changelog_url | link:"Full changelog" }}
 {% endif %}

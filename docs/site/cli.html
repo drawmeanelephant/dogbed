@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>dogbed — the CLI</title>
+<link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#13100b">
+<link rel="icon" type="image/png" href="assets/oliver-favicon.png">
+<meta property="og:title" content="dogbed">
+<meta property="og:description" content="the dog builds its own docs">
+<meta property="og:image" content="https://dogbed.filed.fyi/assets/oliver-og.png">
+</head>
+<body>
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html" class="here">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+# The CLI
+<p>Four commands, one contract: errors go to stderr, stdout stays empty, exit 1 — a failed render never emits a half-rendered document.</p>
+<h2>Commands</h2>
+<ul>
+<li><code>dogbed render &lt;template.knap&gt; [options]</code> — render a Knap template plus a JSON object to HTML on stdout.</li>
+<li><code>dogbed template &lt;name&gt;</code> — print an embedded starter to stdout: <code>verdict</code>, <code>release-notes</code>, <code>reading-note</code>. <code>--list</code> shows names.</li>
+<li><code>dogbed init</code> — scaffold a site skeleton (routes, templates, data, build.sh) into the current directory. Strictly additive — an existing file is never overwritten; a superseded scaffold file is archived to a timestamped dir.</li>
+<li><code>dogbed --help</code>, <code>dogbed --version</code> — the obvious.</li>
+</ul>
+<h2>Render options</h2>
+<ul>
+<li><code>--data, -d &lt;file&gt;</code> — JSON object with the template variables (default <code>{}</code>). <code>-</code> reads stdin.</li>
+<li><code>--profile, -p html|xhtml</code> — oliver output profile: HTML5 fragment (default) or XHTML 1.0 Strict.</li>
+<li><code>--title &lt;text&gt;</code> — wrap the fragment in a minimal document shell and set <code>&lt;title&gt;</code> (HTML-escaped). XHTML gets the Strict shell.</li>
+<li><code>--css &lt;href&gt;</code> — <code>&lt;link rel=stylesheet&gt;</code> into the shell. Repeatable, order kept, href verbatim.</li>
+<li><code>--head &lt;html&gt;</code> — splice one verbatim line into <code>&lt;head&gt;</code> (meta, favicon). Repeatable.</li>
+<li><code>--lang &lt;tag&gt;</code> — <code>lang</code> on the root element (<code>xml:lang</code> too under XHTML). Verbatim — pick a real BCP 47 tag.</li>
+<li><code>--max-output, -m &lt;bytes&gt;</code> — ceiling on the emitted document, shell included (<code>k</code>/<code>m</code>/<code>g</code> suffixes). Default 256 MiB, <code>0</code> = unlimited. Enforced as bytes are written — over-limit output never exists.</li>
+</ul>
+<h2>Exit contract</h2>
+<p>Any of <code>--title</code>, <code>--css</code>, <code>--head</code>, <code>--lang</code> switches output from a bare fragment to a full document. With none, the fragment is byte-identical to a bare oliver render:</p>
+<pre><code>$ dogbed render share/verdict.knap -d share/verdict.json
+&lt;h1&gt;dogbed 0.1.0 — first verdict&lt;/h1&gt;
+&lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the pipeline sings&lt;/p&gt;
+&lt;h2&gt;Blockers&lt;/h2&gt;
+&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;ol&gt;
+&lt;li&gt;ship it&lt;/li&gt;
+&lt;/ol&gt;
+$ echo '{&quot;bad&quot;:1' | dogbed render verdict.knap -d -
+dogbed: invalid JSON in data (-): SyntaxError
+$ echo $?
+1
+</code></pre>
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>
+</body>
+</html>

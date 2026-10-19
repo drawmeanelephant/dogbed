@@ -6,7 +6,7 @@
 //!     dogbed --help
 //!     dogbed --version
 //!
-//! Pipeline: Knap template + JSON data --k4o--> Textile --oliver--> HTML.
+//! Pipeline: Knap template + JSON data --k4o--> Markdown --oliver--> HTML.
 //! By default the output is a bare HTML fragment; --title or --css wraps it
 //! in a minimal document shell. init scaffolds a site skeleton (routes,
 //! layout, content dirs, wiring) into the current directory — strictly
@@ -83,7 +83,7 @@ const usage_text =
     \\                      form is also accepted.
     \\  --max-output, -m <bytes>
     \\                      Ceiling on the emitted document in bytes, shell
-    \\                      included (it also bounds the intermediate Textile
+    \\                      included (it also bounds the intermediate Markdown
     \\                      render). Nested loops multiply, so a small
     \\                      template over modest data can ask for far more
     \\                      than you expect. Default 268435456 (256 MiB);
@@ -255,9 +255,9 @@ pub fn main(init: std.process.Init) !u8 {
         }
     }
 
-    // Stage 1: Knap template + data --k4o--> Textile.
+    // Stage 1: Knap template + data --k4o--> Markdown (knap-faithful).
     var d = kt.Diagnostic{};
-    const textile = kt.renderWithLimit(arena, template, root, &d, max_output) catch |e| switch (e) {
+    const source = kt.renderFormatWithLimit(arena, template, root, &d, .markdown, max_output) catch |e| switch (e) {
         error.Template => {
             report("template: {s}", .{if (d.message.len > 0) d.message else "template error"});
             return 1;
@@ -268,15 +268,18 @@ pub fn main(init: std.process.Init) !u8 {
         },
     };
 
-    // Stage 2: Textile --oliver--> HTML. The document borrows the textile
-    // bytes, which live in the arena and outlive the parse result.
-    var result = oliver.parse(arena, textile, .textile, .{}) catch |e| {
-        report("textile: {s}", .{@errorName(e)});
+    // Stage 2: Markdown --oliver--> HTML, with the Obsidian extensions on
+    // so the k4o extension filters land as real nodes: highlights, math,
+    // callouts, comments, embeds, wikilinks, strike, task lists, footnotes.
+    // The document borrows the source bytes, which live in the arena and
+    // outlive the parse result.
+    var result = oliver.parse(arena, source, .markdown, .{ .markdown = oliver.markdown.obsidian }) catch |e| {
+        report("markdown: {s}", .{@errorName(e)});
         return 1;
     };
     defer result.deinit();
 
-    // Stage 2: Textile --oliver--> HTML, into a bounded buffer: the write
+    // Stage 2: Markdown --oliver--> HTML, into a bounded buffer: the write
     // that would cross --max-output aborts here, so an oversized fragment is
     // never materialized. A cap trip and an allocation failure both surface
     // as error.WriteFailed; `exceeded` tells them apart.

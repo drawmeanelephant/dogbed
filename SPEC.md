@@ -3,13 +3,13 @@
 ## What it is
 
 A document compiler. It reads a Knap template plus data (a JSON object, from
-a file or stdin), renders the template to Textile with k4o, renders the
-Textile to HTML with oliver, and writes the result to stdout. By default
+a file or stdin), renders the template to Markdown with k4o, renders the
+Markdown to HTML with oliver, and writes the result to stdout. By default
 that is a bare HTML fragment; `--title`/`--css` finish it into a document
 (see the CLI contract).
 
 ```
-template.knap + data.json --k4o--> Textile --oliver--> HTML
+template.knap + data.json --k4o--> Markdown --oliver--> HTML
 ```
 
 ## What it is not
@@ -21,10 +21,10 @@ button, kill it.
 
 ## Why k4o + oliver, and why one binary
 
-- k4o alone is a Textile emitter nobody asked for. oliver alone renders
+- k4o alone is a Markdown emitter nobody asked for. oliver alone renders
   documents but cannot template. Together they are the two halves of
   "I have data, I want a document."
-- The Textile middle step is the IR: it keeps the stages composable and
+- The Markdown middle step is the IR: it keeps the stages composable and
   independently testable instead of fused.
 - One static Zig binary, not ten things. Both engines are Zig libraries;
   dogbed embeds them. No pin drift, no subprocesses, no runtime.

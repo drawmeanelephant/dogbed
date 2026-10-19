@@ -11,7 +11,7 @@
 
 {{ "Elsewhere" | h2 }}
 
-* "home":index.html
-* "about":about.html
+- [home](index.html)
+- [about](about.html)
 
-rendered by "dogbed":https://github.com/drawmeanelephant/dogbed — k4o templates it, oliver renders it.
+rendered by [dogbed](https://github.com/drawmeanelephant/dogbed) — k4o templates it, oliver renders it.

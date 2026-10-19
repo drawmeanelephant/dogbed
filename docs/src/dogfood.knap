@@ -1,6 +1,7 @@
-{# dogfood.knap — data: title, intro_p, how_p, verdict_p, vjson, render_p,
-   vrender, find1_p, dash_tr, find2_p, ticks_tr, fix_p, fix_tr, find3_p,
-   find4_p, find4_tr, close_p, nav #}{{ title | h1 }}
+<div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
+<nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html" class="here">dogfood</a><a href="deploy.html">deploy</a></nav></div>
+<div class="layout">
+{{ title | h1 }}
 
 {{ intro_p }}
 
@@ -10,32 +11,35 @@
 
 {{ verdict_p }}
 
-{{ vjson | codeblock }}
+```
+{{ vjson }}
+```
 
 {{ render_p }}
 
-{{ vrender | codeblock }}
+{{ vrender | code_block }}
 
 {{ "What running it surfaced" | h2 }}
 
 {{ find1_p }}
 
-{{ dash_tr | codeblock }}
+{{ dash_tr | code_block }}
 
 {{ find2_p }}
 
-{{ ticks_tr | codeblock }}
+{{ ticks_tr | code_block }}
 
 {{ fix_p }}
 
-{{ fix_tr | codeblock }}
+{{ fix_tr | code_block }}
 
 {{ find3_p }}
 
 {{ find4_p }}
 
-{{ find4_tr | codeblock }}
+{{ find4_tr | code_block }}
 
 {{ close_p }}
-
-{{ nav }}
+<div class="foot"><img src="assets/oliver-badge.webp" alt="rendered by oliver">
+<span>rendered by <a href="https://github.com/drawmeanelephant/dogbed">dogbed</a> — k4o templates it, oliver renders it</span></div>
+</div>

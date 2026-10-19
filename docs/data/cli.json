@@ -1,0 +1,21 @@
+{
+  "title": "The CLI",
+  "intro_p": "Four commands, one contract: errors go to stderr, stdout stays empty, exit 1 — a failed render never emits a half-rendered document.",
+  "commands": [
+    "`dogbed render <template.knap> [options]` — render a Knap template plus a JSON object to HTML on stdout.",
+    "`dogbed template <name>` — print an embedded starter to stdout: `verdict`, `release-notes`, `reading-note`. `--list` shows names.",
+    "`dogbed init` — scaffold a site skeleton (routes, templates, data, build.sh) into the current directory. Strictly additive — an existing file is never overwritten; a superseded scaffold file is archived to a timestamped dir.",
+    "`dogbed --help`, `dogbed --version` — the obvious."
+  ],
+  "options": [
+    "`--data, -d <file>` — JSON object with the template variables (default `{}`). `-` reads stdin.",
+    "`--profile, -p html|xhtml` — oliver output profile: HTML5 fragment (default) or XHTML 1.0 Strict.",
+    "`--title <text>` — wrap the fragment in a minimal document shell and set `<title>` (HTML-escaped). XHTML gets the Strict shell.",
+    "`--css <href>` — `<link rel=stylesheet>` into the shell. Repeatable, order kept, href verbatim.",
+    "`--head <html>` — splice one verbatim line into `<head>` (meta, favicon). Repeatable.",
+    "`--lang <tag>` — `lang` on the root element (`xml:lang` too under XHTML). Verbatim — pick a real BCP 47 tag.",
+    "`--max-output, -m <bytes>` — ceiling on the emitted document, shell included (`k`/`m`/`g` suffixes). Default 256 MiB, `0` = unlimited. Enforced as bytes are written — over-limit output never exists."
+  ],
+  "contract_p": "Any of `--title`, `--css`, `--head`, `--lang` switches output from a bare fragment to a full document. With none, the fragment is byte-identical to a bare oliver render:",
+  "contract_tr": "$ dogbed render share/verdict.knap -d share/verdict.json\n<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n$ echo '{\"bad\":1' | dogbed render verdict.knap -d -\ndogbed: invalid JSON in data (-): SyntaxError\n$ echo $?\n1"
+}

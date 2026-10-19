@@ -11,7 +11,7 @@ cat findings.json | dogbed render report.knap -d - > report.html
 ```
 
 **The pipeline:** a [Knap](https://github.com/drawmeanelephant/k4o) template plus a
-JSON object renders to Textile via [k4o](https://github.com/drawmeanelephant/k4o),
+JSON object renders to Markdown via [k4o](https://github.com/drawmeanelephant/k4o),
 which [oliver](https://github.com/drawmeanelephant/oliver) then renders to HTML.
 One static binary, no runtime, no JavaScript, no database, no edit button.
 
@@ -102,7 +102,7 @@ runs the suite.
 Every week is the same dance: structured findings in, a consistent
 good-looking document out — PR verdicts, audit reports, release notes.
 oliver renders documents but can't template; k4o templates but only emits
-Textile. dogbed is the two halves joined: data → finished document.
+Markdown. dogbed is the two halves joined: data → finished document.
 See [SPEC.md](SPEC.md).
 
 ## License

@@ -102,6 +102,35 @@ test "render: a leading UTF-8 BOM in the template is stripped (issue #22)" {
     try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "\xef\xbb\xbf") == null);
 }
 
+test "render: footnotes parse and render through the whole pipeline (issue #30)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "f.knap",
+        .data = "{{ body }}\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "f.json",
+        .data = "{\"body\":\"Text with a note.[^a]\\n\\n[^a]: the footnote\"}",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "f.knap", "-d", "f.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    // Before the fix the ref degraded to a bare "a" and the definition
+    // vanished; now the ref links and the footnotes section is emitted.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "class=\"footnote-ref\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "class=\"footnotes\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "the footnote") != null);
+}
+
 // -- deep-nesting diagnostics (issues #23, #24) --
 
 /// JSON for `{"a": <depth>×'[' 1 <depth>×']'}` — a value nested `depth`
@@ -707,7 +736,7 @@ fn renderBounded(
     defer result.deinit();
 
     var html_out = cli.Bounded.init(alloc, max_output);
-    oliver.html.render(alloc, &html_out.writer, &result.document, .{ .profile = profile }) catch |e| {
+    oliver.html.render(alloc, &html_out.writer, &result.document, .{ .profile = profile, .footnotes = true }) catch |e| {
         if (e == error.WriteFailed and html_out.exceeded) return .html_stage;
         return e;
     };

@@ -1,6 +1,7 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html" class="here">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
 <div class="layout">
+
 <div class="hero"><div class="kicker">document compiler · not a CMS</div>
 <h1>dog<span class="em">bed</span><br>the dog builds its own docs</h1>
 <p class="sub">A Knap template plus a JSON object goes in, a finished HTML document comes out. One static binary — no runtime, no JavaScript, no database, no edit button.</p>

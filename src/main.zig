@@ -282,9 +282,11 @@ pub fn main(init: std.process.Init) !u8 {
     // Stage 2: Markdown --oliver--> HTML, into a bounded buffer: the write
     // that would cross --max-output aborts here, so an oversized fragment is
     // never materialized. A cap trip and an allocation failure both surface
-    // as error.WriteFailed; `exceeded` tells them apart.
+    // as error.WriteFailed; `exceeded` tells them apart. `footnotes` matches
+    // the obsidian parse preset: without it `[^x]` refs degrade to bare text
+    // and definitions vanish entirely (issue #30).
     var html_out = Bounded.init(arena, max_output);
-    oliver.html.render(arena, &html_out.writer, &result.document, .{ .profile = profile }) catch |e| {
+    oliver.html.render(arena, &html_out.writer, &result.document, .{ .profile = profile, .footnotes = true }) catch |e| {
         if (html_out.exceeded) {
             report("output exceeds --max-output ({d})", .{max_output});
         } else {

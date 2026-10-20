@@ -15,7 +15,7 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html" class="here">deploy</a></nav></div>
 <div class="layout">
-# The publishing pipeline
+<h1>The publishing pipeline</h1>
 <p>This page is part of the site it describes. The docs deploy to Cloudflare Pages, and this page documents the pipeline that ships them: edit Knap and JSON, rebuild with the tool, prove the committed output is current, merge, and Pages takes it from there. The tool documents its own deployment.</p>
 <h2>The loop</h2>
 <p>The whole loop: edit <code>docs/src/*.knap</code> or <code>docs/data/*.json</code>, rebuild the site, prove the committed output is current, ship it through a PR. On merge, the deploy workflow pushes <code>docs/site/</code> to Cloudflare Pages:</p>

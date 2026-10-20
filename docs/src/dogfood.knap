@@ -1,6 +1,7 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html" class="here">dogfood</a><a href="deploy.html">deploy</a></nav></div>
 <div class="layout">
+
 {{ title | h1 }}
 
 {{ intro_p }}

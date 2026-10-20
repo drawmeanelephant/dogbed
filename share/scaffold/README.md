@@ -30,6 +30,17 @@ Output lands in `site/`. Open `site/index.html` in a browser.
 2. add a line to `routes.txt`: `<name><TAB><Page Title>`
 3. write `data/<name>.json` with the fields the template reads
 
+## Knap gotchas
+
+- **Blank line after an opening block-level HTML tag.** A line starting
+  `<div …>` opens a CommonMark HTML block that runs verbatim until the
+  next blank line — Markdown on the very next line (a `# ` heading, a
+  `{{ }}` print) passes through as literal text. Always leave a blank
+  line between the tag and the Markdown that follows it.
+- **Data strings are Markdown source.** `*em*`, `` `code` `` and
+  `[label](url)` in a JSON value render live, and a value opening with
+  `# ` becomes a heading. Use literal text where that isn't wanted.
+
 ## Run `dogbed init` again any time
 
 init never overwrites: it only fills gaps. An existing file — yours or a

@@ -255,9 +255,13 @@ pub fn main(init: std.process.Init) !u8 {
         }
     }
 
-    // Stage 1: Knap template + data --k4o--> Markdown (knap-faithful).
+    // Stage 1: Knap template + data --k4o--> oliver-format Markdown. Plain
+    // knap-faithful markdown writes table delimiters as `| - |`, which
+    // oliver's `:?-+:?` grammar reads as a paragraph; the oliver format
+    // widens them to `---` and is otherwise byte-identical except for
+    // `comment`, which stays an HTML comment.
     var d = kt.Diagnostic{};
-    const source = kt.renderFormatWithLimit(arena, template, root, &d, .markdown, max_output) catch |e| switch (e) {
+    const source = kt.renderFormatWithLimit(arena, template, root, &d, .oliver, max_output) catch |e| switch (e) {
         error.Template => {
             report("template: {s}", .{if (d.message.len > 0) d.message else "template error"});
             return 1;

@@ -34,7 +34,7 @@ test "pipeline: knap template renders through markdown to html" {
 
     // Stage 1: k4o.
     var d = kt.Diagnostic{};
-    const source = try kt.renderFormat(alloc, template, parsed.value, &d, .markdown);
+    const source = try kt.renderFormat(alloc, template, parsed.value, &d, .oliver);
     try std.testing.expect(std.mem.indexOf(u8, source, "# The Machine Stops") != null);
     try std.testing.expect(std.mem.indexOf(u8, source, "*A reading note*") != null);
 
@@ -65,7 +65,7 @@ test "pipeline: xhtml profile" {
     defer parsed.deinit();
 
     var d = kt.Diagnostic{};
-    const source = try kt.renderFormat(alloc, "{{ title | h1 }}\n", parsed.value, &d, .markdown);
+    const source = try kt.renderFormat(alloc, "{{ title | h1 }}\n", parsed.value, &d, .oliver);
     var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 
@@ -131,6 +131,31 @@ test "render: footnotes parse and render through the whole pipeline (issue #30)"
     try std.testing.expect(std.mem.indexOf(u8, run.stdout, "the footnote") != null);
 }
 
+test "render: a k4o table becomes an html table, not a paragraph" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "t.knap", .data = "{{ rows | table }}\n" });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "t.json",
+        .data = "{\"rows\":[[\"claim\",\"evidence\"],[\"p99 under 2ms\",\"vendor benchmark\"]]}",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "t.knap", "-d", "t.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    // knap-faithful markdown writes `| - |` delimiters, which oliver reads
+    // as a paragraph; the oliver format's `---` delimiters make a table.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<table>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<td>vendor benchmark</td>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "| - |") == null);
+}
 // -- deep-nesting diagnostics (issues #23, #24) --
 
 /// JSON for `{"a": <depth>×'[' 1 <depth>×']'}` — a value nested `depth`
@@ -374,7 +399,7 @@ test "templates: every starter renders through the full pipeline with its exampl
 
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, entry.example_data, .{});
         var d = kt.Diagnostic{};
-        const source = try kt.renderFormat(alloc, entry.template, parsed, &d, .markdown);
+        const source = try kt.renderFormat(alloc, entry.template, parsed, &d, .oliver);
         try std.testing.expect(source.len > 0);
 
         var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
@@ -675,7 +700,7 @@ test "scaffold: routes, files, and rendered pages all agree" {
 
         const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, data_json, .{});
         var d = kt.Diagnostic{};
-        const source = try kt.renderFormat(alloc, knap, parsed, &d, .markdown);
+        const source = try kt.renderFormat(alloc, knap, parsed, &d, .oliver);
         var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
         defer result.deinit();
         var html_buf = std.Io.Writer.Allocating.init(alloc);
@@ -692,7 +717,7 @@ test "scaffold: routes, files, and rendered pages all agree" {
         \\{"title":"T","intro":"I","body":"B"}
     , .{});
     var d = kt.Diagnostic{};
-    const source = try kt.renderFormat(alloc, layout, frame_data, &d, .markdown);
+    const source = try kt.renderFormat(alloc, layout, frame_data, &d, .oliver);
     var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
     var html_buf = std.Io.Writer.Allocating.init(alloc);
@@ -728,7 +753,7 @@ fn renderBounded(
 ) !Trip {
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, data_json, .{});
     var d = kt.Diagnostic{};
-    const source = kt.renderFormatWithLimit(alloc, template, parsed, &d, .markdown, max_output) catch |e| switch (e) {
+    const source = kt.renderFormatWithLimit(alloc, template, parsed, &d, .oliver, max_output) catch |e| switch (e) {
         error.Template => return .k4o_stage,
         error.OutOfMemory => return error.OutOfMemory,
     };
@@ -807,7 +832,7 @@ test "max-output: the html stage stops storing at the cap" {
 
     const parsed = try std.json.parseFromSliceLeaky(std.json.Value, alloc, "{\"body\":\"" ++ @as([1000]u8, @splat('&')) ++ "\"}", .{});
     var d = kt.Diagnostic{};
-    const source = try kt.renderFormatWithLimit(alloc, "{{ body }}\n", parsed, &d, .markdown, 4096);
+    const source = try kt.renderFormatWithLimit(alloc, "{{ body }}\n", parsed, &d, .oliver, 4096);
     var result = try oliver.parse(alloc, source, .markdown, .{ .markdown = oliver.markdown.obsidian });
     defer result.deinit();
 

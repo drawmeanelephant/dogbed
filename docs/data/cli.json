@@ -14,8 +14,9 @@
     "`--css <href>` — `<link rel=stylesheet>` into the shell. Repeatable, order kept, href verbatim.",
     "`--head <html>` — splice one verbatim line into `<head>` (meta, favicon). Repeatable.",
     "`--lang <tag>` — `lang` on the root element (`xml:lang` too under XHTML). Verbatim — pick a real BCP 47 tag.",
+    "`--wikilink-href <pattern>` — href pattern for `[[wikilinks]]`: `{slug}` is the target slugged lowercase-kebab, `{target}` the verbatim target. Default `{slug}.html`.",
     "`--max-output, -m <bytes>` — ceiling on the emitted document, shell included (`k`/`m`/`g` suffixes). Default 256 MiB, `0` = unlimited. Enforced as bytes are written — over-limit output never exists."
   ],
   "contract_p": "Any of `--title`, `--css`, `--head`, `--lang` switches output from a bare fragment to a full document. With none, the fragment is byte-identical to a bare oliver render:",
-  "contract_tr": "$ dogbed render share/verdict.knap -d share/verdict.json\n<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n$ echo '{\"bad\":1' | dogbed render verdict.knap -d -\ndogbed: invalid JSON in data (-): SyntaxError\n$ echo $?\n1"
+  "contract_tr": "$ dogbed render share/verdict.knap -d share/verdict.json\n<h1 id=\"dogbed-010-first-verdict\">dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2 id=\"blockers\">Blockers</h2>\n<h2 id=\"nits\">Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n$ echo '{\"bad\":1' | dogbed render verdict.knap -d -\ndogbed: invalid JSON in data (-): UnexpectedEndOfInput\n$ echo $?\n1"
 }

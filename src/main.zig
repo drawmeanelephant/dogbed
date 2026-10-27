@@ -81,6 +81,19 @@ const usage_text =
     \\                      (en, pt-BR). Like --head, --lang alone switches
     \\                      the output to a full document. The --lang=<tag>
     \\                      form is also accepted.
+    \\  --wikilink-href <pat>
+    \\                      Href pattern for Obsidian-style [[wikilinks]]
+    \\                      (the k4o wikilink filter). {slug} expands to
+    \\                      the link target slugged to lowercase-kebab
+    \\                      (ASCII alnum kept, other runs collapse to -);
+    \\                      {target} expands to the verbatim target.
+    \\                      A [[page#heading]] fragment keeps its # with
+    \\                      the heading slugged after the pattern. The
+    \\                      pattern must contain {slug} or {target}.
+    \\                      Default "{slug}.html": [[AcmeDB docs —
+    \\                      backups]] links to acmedb-docs-backups.html.
+    \\                      Use "{target}" for oliver's stock
+    \\                      pass-through behavior.
     \\  --max-output, -m <bytes>
     \\                      Ceiling on the emitted document in bytes, shell
     \\                      included (it also bounds the intermediate Markdown
@@ -95,6 +108,11 @@ const usage_text =
     \\                      OS-level resource controls.
     \\  --help, -h          Show this help.
     \\  --version, -v       Show the version.
+    \\
+    \\Front matter: a leading `---` YAML block is consumed as document
+    \\metadata, never rendered. Its `title` field supplies the shell
+    \\<title> when --title isn't given (a shell flag is still required —
+    \\front matter alone stays a fragment).
     \\
     \\Exit codes: 0 = success, 1 = any error (message on stderr).
     \\
@@ -137,6 +155,7 @@ pub fn main(init: std.process.Init) !u8 {
     var head = std.ArrayList([]const u8).empty;
     defer head.deinit(init.gpa);
     var lang: ?[]const u8 = null;
+    var wikilink_href: ?[]const u8 = null;
     var i: usize = 1;
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
@@ -213,6 +232,19 @@ pub fn main(init: std.process.Init) !u8 {
             if (value.len == 0) return usage(init, "missing value for --lang");
             if (lang != null) return usage(init, "duplicate --lang");
             lang = value;
+        } else if (std.mem.eql(u8, arg, "--wikilink-href")) {
+            i += 1;
+            if (i >= args.items.len) return usage(init, "missing value for --wikilink-href");
+            if (wikilink_href != null) return usage(init, "duplicate --wikilink-href");
+            if (args.items[i].len == 0) return usage(init, "missing value for --wikilink-href");
+            if (!validWikilinkPattern(args.items[i])) return usage(init, "invalid value for --wikilink-href (expected a pattern containing {slug} or {target})");
+            wikilink_href = args.items[i];
+        } else if (std.mem.startsWith(u8, arg, "--wikilink-href=")) {
+            const value = arg[std.mem.indexOfScalar(u8, arg, '=').? + 1 ..];
+            if (value.len == 0) return usage(init, "missing value for --wikilink-href");
+            if (wikilink_href != null) return usage(init, "duplicate --wikilink-href");
+            if (!validWikilinkPattern(value)) return usage(init, "invalid value for --wikilink-href (expected a pattern containing {slug} or {target})");
+            wikilink_href = value;
         } else if (arg.len > 1 and arg[0] == '-') {
             return usage(init, "unknown option");
         } else {
@@ -275,9 +307,13 @@ pub fn main(init: std.process.Init) !u8 {
     // Stage 2: Markdown --oliver--> HTML, with the Obsidian extensions on
     // so the k4o extension filters land as real nodes: highlights, math,
     // callouts, comments, embeds, wikilinks, strike, task lists, footnotes.
-    // The document borrows the source bytes, which live in the arena and
-    // outlive the parse result.
-    var result = oliver.parse(arena, source, .markdown, .{ .markdown = oliver.markdown.obsidian }) catch |e| {
+    // A leading `---` block is consumed as YAML front matter — metadata,
+    // never rendered. The document borrows the source bytes, which live in
+    // the arena and outlive the parse result.
+    var result = oliver.parse(arena, source, .markdown, .{
+        .markdown = oliver.markdown.obsidian,
+        .frontmatter = .yaml,
+    }) catch |e| {
         report("markdown: {s}", .{@errorName(e)});
         return 1;
     };
@@ -288,9 +324,19 @@ pub fn main(init: std.process.Init) !u8 {
     // never materialized. A cap trip and an allocation failure both surface
     // as error.WriteFailed; `exceeded` tells them apart. `footnotes` matches
     // the obsidian parse preset: without it `[^x]` refs degrade to bare text
-    // and definitions vanish entirely (issue #30).
+    // and definitions vanish entirely (issue #30). `heading_ids` gives every
+    // heading a GFM-style slug id so `[[page#heading]]` links have a real
+    // anchor to land on, and the wikilink resolver maps `[[target]]` to a
+    // page URL through the --wikilink-href pattern (default `{slug}.html`).
+    var wikilink_policy: WikilinkPolicy = .{ .alloc = arena, .pattern = wikilink_href orelse "{slug}.html" };
     var html_out = Bounded.init(arena, max_output);
-    oliver.html.render(arena, &html_out.writer, &result.document, .{ .profile = profile, .footnotes = true }) catch |e| {
+    oliver.html.render(arena, &html_out.writer, &result.document, .{
+        .profile = profile,
+        .footnotes = true,
+        .heading_ids = true,
+        .wikilink_resolver = resolveWikilink,
+        .wikilink_resolver_ctx = &wikilink_policy,
+    }) catch |e| {
         if (html_out.exceeded) {
             report("output exceeds --max-output ({d})", .{max_output});
         } else {
@@ -304,7 +350,9 @@ pub fn main(init: std.process.Init) !u8 {
     // to a bare oliver render. The shell stage is bounded by the same cap.
     var final: []const u8 = html_out.written();
     if (title != null or css.items.len > 0 or head.items.len > 0 or lang != null) {
-        final = wrapDocument(arena, final, title, css.items, head.items, lang, profile, max_output) catch |e| switch (e) {
+        // A front-matter `title:` supplies the shell title when --title
+        // wasn't given; the shell itself still requires a shell flag.
+        final = wrapDocument(arena, final, title orelse metadataTitle(result.metadata), css.items, head.items, lang, profile, max_output) catch |e| switch (e) {
             error.OutputLimitExceeded => {
                 report("output exceeds --max-output ({d})", .{max_output});
                 return 1;
@@ -602,6 +650,109 @@ fn parseSize(text: []const u8) error{Invalid}!usize {
     const n = std.fmt.parseInt(u64, digits, 10) catch return error.Invalid;
     const scaled = std.math.mul(u64, n, scale) catch return error.Invalid;
     return std.math.cast(usize, scaled) orelse error.Invalid;
+}
+
+// -- wikilinks + front matter --
+
+/// The wikilink resolver's context: the --wikilink-href pattern plus the
+/// arena resolved hrefs are built in (resolver results must outlive the
+/// render call).
+const WikilinkPolicy = struct {
+    alloc: std.mem.Allocator,
+    pattern: []const u8,
+};
+
+/// An href pattern must name at least one placeholder or every wikilink
+/// would resolve to the same literal string.
+fn validWikilinkPattern(pattern: []const u8) bool {
+    return std.mem.indexOf(u8, pattern, "{slug}") != null or
+        std.mem.indexOf(u8, pattern, "{target}") != null;
+}
+
+/// The oliver `wikilink_resolver` hook: `[[target]]` / `[[target|label]]`
+/// maps to the --wikilink-href pattern with `{slug}`/`{target}` expanded.
+/// On an allocation failure the link degrades to oliver's stock policy —
+/// the raw target as the href — rather than failing the render.
+fn resolveWikilink(target: []const u8, label: ?[]const u8, ctx: ?*const anyopaque) oliver.html.ResolvedWikilink {
+    const fallback: oliver.html.ResolvedWikilink = .{ .href = target, .text = label orelse target };
+    const policy: *const WikilinkPolicy = @ptrCast(@alignCast(ctx orelse return fallback));
+    const href = wikilinkHref(policy.alloc, target, policy.pattern) catch return fallback;
+    return .{ .href = href, .text = label orelse target };
+}
+
+/// Slugifies `text` for the `{slug}` placeholder: ASCII letters fold
+/// lowercase, ASCII alphanumerics and `_` are kept, every other byte run
+/// collapses to a single `-`, and leading/trailing `-` are trimmed —
+/// `AcmeDB docs — backups` becomes `acmedb-docs-backups`. When nothing
+/// survives (an all-non-ASCII target, say) the result is empty and the
+/// caller falls back to the raw target, which the renderer then
+/// percent-encodes like any other href.
+pub fn wikilinkSlug(alloc: std.mem.Allocator, text: []const u8) ![]const u8 {
+    var out: std.ArrayList(u8) = .empty;
+    var dash = false;
+    for (text) |b| {
+        if (std.ascii.isAlphanumeric(b) or b == '_') {
+            if (dash and out.items.len > 0) try out.append(alloc, '-');
+            dash = false;
+            try out.append(alloc, std.ascii.toLower(b));
+        } else {
+            dash = true;
+        }
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// Builds a wikilink href from an Obsidian `[[target]]` and a
+/// --wikilink-href pattern: `{slug}` expands to the page part slugged (or
+/// the raw page part when the slug is empty), `{target}` to the page part
+/// verbatim. A `#heading` part is kept as `#heading-slug` appended after
+/// the pattern; `[[#heading]]` — a target with no page part — is a
+/// same-document link and skips the pattern entirely.
+pub fn wikilinkHref(alloc: std.mem.Allocator, target: []const u8, pattern: []const u8) ![]const u8 {
+    const hash = std.mem.indexOfScalar(u8, target, '#');
+    const page = if (hash) |h| target[0..h] else target;
+    const frag = if (hash) |h| target[h + 1 ..] else null;
+
+    var out: std.ArrayList(u8) = .empty;
+    if (page.len > 0) {
+        var i: usize = 0;
+        while (i < pattern.len) {
+            if (std.mem.startsWith(u8, pattern[i..], "{slug}")) {
+                const slug = try wikilinkSlug(alloc, page);
+                try out.appendSlice(alloc, if (slug.len > 0) slug else page);
+                i += "{slug}".len;
+            } else if (std.mem.startsWith(u8, pattern[i..], "{target}")) {
+                try out.appendSlice(alloc, page);
+                i += "{target}".len;
+            } else {
+                try out.append(alloc, pattern[i]);
+                i += 1;
+            }
+        }
+    }
+    if (frag) |f| {
+        if (f.len > 0) {
+            const slug = try wikilinkSlug(alloc, f);
+            try out.append(alloc, '#');
+            try out.appendSlice(alloc, if (slug.len > 0) slug else f);
+        }
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// The front-matter `title` scalar, if the document declared one —
+/// supplies the shell `<title>` when --title wasn't passed.
+fn metadataTitle(metadata: ?oliver.frontmatter.Metadata) ?[]const u8 {
+    const m = metadata orelse return null;
+    for (m.entries) |e| {
+        if (std.mem.eql(u8, e.key, "title")) {
+            return switch (e.value) {
+                .scalar => |s| if (s.len > 0) s else null,
+                else => null,
+            };
+        }
+    }
+    return null;
 }
 
 /// Wraps a rendered HTML fragment in a minimal document shell. The `title`

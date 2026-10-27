@@ -15,7 +15,7 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html" class="here">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
 <div class="layout">
-<h1>Knap templates</h1>
+<h1 id="knap-templates">Knap templates</h1>
 <p>Three starters ship inside the binary — no fetching, no discovery paths. <code>dogbed template &lt;name&gt;</code> prints one to stdout so you copy it and own it; <code>--list</code> shows the names:</p>
 <pre><code>$ dogbed template --list
 verdict	PR review verdict: blockers, nits, summary.
@@ -23,23 +23,23 @@ release-notes	Release notes: highlights, breaking, added, changed, fixed.
 reading-note	Reading note: author, rating, quote, notes.
 
 </code></pre>
-<h2>The three starters</h2>
+<h2 id="the-three-starters">The three starters</h2>
 <ul>
 <li><code>verdict</code> — a PR review verdict: blockers, nits, summary. Example data in <code>share/verdict.json</code>.</li>
 <li><code>release-notes</code> — highlights, breaking, added, changed, fixed, a changelog link. Every section is <code>{% if %}</code>-guarded: empty data makes the section disappear.</li>
 <li><code>reading-note</code> — author, source link, rating, quote, notes. Everything but the title is optional.</li>
 </ul>
-<h2>The knap language</h2>
+<h2 id="the-knap-language">The knap language</h2>
 <p>The template language is Knap — <code>{{ }}</code> prints (optionally through <code>| filters</code>), <code>{% %}</code> controls (<code>if</code> / <code>for</code> / <code>else</code>), <code>{# #}</code> comments. Literal text passes through as Markdown source, so <code># </code> headings and <code>*emphasis*</code> in the template are live markup:</p>
 <pre><code>$ cat note.knap
 {{ title | h1 }}
 
 {{ verdict | bold }} — {{ summary }}
 $ dogbed render note.knap -d note.json
-&lt;h1&gt;The Machine Stops&lt;/h1&gt;
+&lt;h1 id=&quot;the-machine-stops&quot;&gt;The Machine Stops&lt;/h1&gt;
 &lt;p&gt;&lt;strong&gt;essential&lt;/strong&gt; — worth the reread&lt;/p&gt;
 </code></pre>
-<h2>Loops and guards</h2>
+<h2 id="loops-and-guards">Loops and guards</h2>
 <p>Loops iterate arrays; <code>{% if %}</code> guards whole sections — this is how release-notes drops empty sections. Keep every <code>{% %}</code> tag on its own line:</p>
 <pre><code>{% if nits %}
 {{ &quot;Nits&quot; | h2 }}

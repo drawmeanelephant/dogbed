@@ -6,6 +6,6 @@
   "qs2": "Feed it data. This is the starter example:",
   "qs_json": "{\"blockers\":[],\"nits\":[\"ship it\"],\"summary\":\"the pipeline sings\",\"title\":\"dogbed 0.1.0 — first verdict\",\"verdict\":\"approve\"}",
   "qs3": "Render:",
-  "qs_render": "<h1>dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2>Blockers</h2>\n<h2>Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n",
+  "qs_render": "<h1 id=\"dogbed-010-first-verdict\">dogbed 0.1.0 — first verdict</h1>\n<p><strong>approve</strong> — the pipeline sings</p>\n<h2 id=\"blockers\">Blockers</h2>\n<h2 id=\"nits\">Nits</h2>\n<ol>\n<li>ship it</li>\n</ol>\n",
   "qs4": "That block is the entire output — a bare HTML fragment, ready to pipe into something bigger. Add `--title` or `--css` and dogbed finishes the document for you. Keep reading: [the CLI](cli.html), [knap templates](templates.html), [extensions](extensions.html), [the document shell](shell.html), [the dogfood story](dogfood.html), and [the publishing pipeline](deploy.html)."
 }

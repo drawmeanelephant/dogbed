@@ -8,7 +8,7 @@
     "`reading-note` — author, source link, rating, quote, notes. Everything but the title is optional."
   ],
   "lang_p": "The template language is Knap — `{{ }}` prints (optionally through `| filters`), `{% %}` controls (`if` / `for` / `else`), `{# #}` comments. Literal text passes through as Markdown source, so `# ` headings and `*emphasis*` in the template are live markup:",
-  "lang_tr": "$ cat note.knap\n{{ title | h1 }}\n\n{{ verdict | bold }} — {{ summary }}\n$ dogbed render note.knap -d note.json\n<h1>The Machine Stops</h1>\n<p><strong>essential</strong> — worth the reread</p>",
+  "lang_tr": "$ cat note.knap\n{{ title | h1 }}\n\n{{ verdict | bold }} — {{ summary }}\n$ dogbed render note.knap -d note.json\n<h1 id=\"the-machine-stops\">The Machine Stops</h1>\n<p><strong>essential</strong> — worth the reread</p>",
   "loops_p": "Loops iterate arrays; `{% if %}` guards whole sections — this is how release-notes drops empty sections. Keep every `{% %}` tag on its own line:",
   "loops_tr": "{% if nits %}\n{{ \"Nits\" | h2 }}\n\n{{ nits | list:numbered }}\n{% endif %}\n\n{% for x in items %}{{ x }} {% endfor %}",
   "gotcha_p": "Before filling in your own data: data strings are Markdown source — `*em*`, `` `code` `` and `[label](url)` in a value render live, and a value opening with `# ` becomes a heading. The `escape_md` filter walks a value back to plain text. See the [document shell page](shell.html)."

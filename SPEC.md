@@ -52,7 +52,7 @@ The recurring job: structured findings in, consistent document out.
 
 - `dogbed render <template.knap> [--data <file>] [--profile html|xhtml]
   [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
-  [--max-output <bytes>]`
+  [--wikilink-href <pattern>] [--max-output <bytes>]`
 - `--data -` reads the JSON object from stdin:
   `cat findings.json | dogbed render verdict.knap -d - > verdict.html`
 - Output is a bare HTML fragment unless `--title`, `--css`, `--head`, or
@@ -62,7 +62,20 @@ The recurring job: structured findings in, consistent document out.
   verbatim (URL, path, markup, or BCP 47 tag — the consumer's problem, not
   ours). `--lang` lands on the root element: `lang` for HTML5, `lang` plus
   `xml:lang` for XHTML (WCAG 3.1.1). No flags means byte-identical
-  fragment output.
+  fragment output. A front-matter `title:` supplies the shell `<title>`
+  when `--title` isn't passed — the shell still needs a shell flag.
+- Front matter: a leading `---` YAML block is consumed as document
+  metadata, never rendered (oliver's front matter pre-pass). An unclosed
+  `---` is not front matter and stays ordinary content.
+- `[[wikilinks]]` resolve to page URLs through an href pattern:
+  `{slug}` expands to the target slugged lowercase-kebab (ASCII
+  alphanumerics and `_` kept, other byte runs collapse to `-`), `{target}`
+  to the verbatim target, and a `[[page#heading]]` fragment keeps its `#`
+  with the heading slugged after the pattern. `--wikilink-href` overrides
+  the default `{slug}.html` — `[[AcmeDB docs — backups]]` links to
+  `acmedb-docs-backups.html`. A pattern with no `{slug}` or `{target}` is
+  a usage error. Headings get GFM-style `id` slugs so the fragment half
+  of a wikilink has a real anchor.
 - `--max-output` caps the final document in bytes, shell included (it also
   bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
   multiply, so the default is generous but finite. The cap is enforced as

@@ -98,7 +98,7 @@ test "render: a leading UTF-8 BOM in the template is stripped (issue #22)" {
     // The BOM'd template renders byte-identically to the BOM-less one: an
     // h1 heading, not a paragraph carrying an invisible U+FEFF.
     try std.testing.expectEqualStrings(plain.stdout, bom.stdout);
-    try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "<h1>Title</h1>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "<h1 id=\"title\">Title</h1>") != null);
     try std.testing.expect(std.mem.indexOf(u8, bom.stdout, "\xef\xbb\xbf") == null);
 }
 
@@ -156,6 +156,159 @@ test "render: a k4o table becomes an html table, not a paragraph" {
     try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<td>vendor benchmark</td>") != null);
     try std.testing.expect(std.mem.indexOf(u8, run.stdout, "| - |") == null);
 }
+
+// -- front matter + wikilinks (content-upgrades #42) --
+
+test "render: leading yaml front matter is consumed as metadata, never rendered" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "fm.knap",
+        .data = "---\ntitle: \"Verdict: AcmeDB\"\nsubject: \"AcmeDB\"\n---\n\n# Body\n",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "fm.knap" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    // Before the fix the fence degraded to <hr /> plus a quoted yaml
+    // paragraph; now the whole block is metadata.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<hr") == null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "title:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "subject:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<h1") != null);
+}
+
+test "render: a front-matter title supplies the shell title when --title is absent" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "fm.knap",
+        .data = "---\ntitle: \"Verdict: AcmeDB\"\n---\n\n# Body\n",
+    });
+
+    const exe = try dogbedExe(alloc);
+    // --css triggers the shell; the <title> comes from the front matter.
+    const shelled = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "fm.knap", "--css", "s.css" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, shelled.term);
+    try std.testing.expect(std.mem.indexOf(u8, shelled.stdout, "<title>Verdict: AcmeDB</title>") != null);
+    // --title still wins over the front matter.
+    const explicit = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "fm.knap", "--title", "Explicit" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expect(std.mem.indexOf(u8, explicit.stdout, "<title>Explicit</title>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, explicit.stdout, "Verdict: AcmeDB") == null);
+}
+
+test "render: wikilinks resolve through the default slug policy" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "w.knap",
+        .data = "See [[AcmeDB docs — backups]] and [[Claims|the claims]] and [[Page#Some Heading]] and [[#Local]].\n",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "w.knap" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    // Before the fix the raw title was the href (`href="Claims"`); now the
+    // default `{slug}.html` pattern maps every target to a page URL.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<a href=\"acmedb-docs-backups.html\">AcmeDB docs — backups</a>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<a href=\"claims.html\">the claims</a>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "href=\"page.html#some-heading\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "href=\"#local\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "href=\"Claims\"") == null);
+}
+
+test "render: --wikilink-href overrides the default pattern" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "w.knap", .data = "See [[AcmeDB docs]].\n" });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "w.knap", "--wikilink-href", "/wiki/{slug}/" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "href=\"/wiki/acmedb-docs/\"") != null);
+
+    // A pattern with no placeholder is a usage error, not a silent
+    // every-link-points-here.
+    const bad = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "w.knap", "--wikilink-href", "wiki/" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, bad.term);
+    try std.testing.expectEqual(@as(usize, 0), bad.stdout.len);
+    try std.testing.expect(std.mem.indexOf(u8, bad.stderr, "invalid value for --wikilink-href") != null);
+}
+
+test "render: callouts render as callout blocks, not plain blockquotes" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "c.knap",
+        .data = "> [!warning] Heads up\n> A callout body line.\n",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "c.knap" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "class=\"callout callout-warning\"") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "class=\"callout-title\">Heads up") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "[!warning]") == null);
+}
+
+test "wikilink: slug and href policy units" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    try std.testing.expectEqualStrings("acmedb-docs-backups", try cli.wikilinkSlug(alloc, "AcmeDB docs — backups"));
+    try std.testing.expectEqualStrings("claims", try cli.wikilinkSlug(alloc, "Claims"));
+    try std.testing.expectEqualStrings("a_b", try cli.wikilinkSlug(alloc, "a_b"));
+    try std.testing.expectEqualStrings("", try cli.wikilinkSlug(alloc, "———"));
+
+    try std.testing.expectEqualStrings("page.html#some-heading", try cli.wikilinkHref(alloc, "Page#Some Heading", "{slug}.html"));
+    try std.testing.expectEqualStrings("#local", try cli.wikilinkHref(alloc, "#Local", "{slug}.html"));
+    try std.testing.expectEqualStrings("page.html", try cli.wikilinkHref(alloc, "Page#", "{slug}.html"));
+    try std.testing.expectEqualStrings("/wiki/x/", try cli.wikilinkHref(alloc, "X", "/wiki/{slug}/"));
+    try std.testing.expectEqualStrings("My Page.html", try cli.wikilinkHref(alloc, "My Page", "{target}.html"));
+}
+
 // -- deep-nesting diagnostics (issues #23, #24) --
 
 /// JSON for `{"a": <depth>×'[' 1 <depth>×']'}` — a value nested `depth`
@@ -1259,8 +1412,8 @@ test "stdout: output lands at the fd offset, never clobbering a redirected file"
     const exe = try dogbedExe(alloc);
     const version = try std.fmt.allocPrint(alloc, "dogbed {s}\n", .{build_options.version});
     const runs = [_]struct { argv: []const []const u8, want: []const u8 }{
-        .{ .argv = &.{ exe, "render", "t.knap", "-d", "a.json" }, .want = "<h1>AAA</h1>\n" },
-        .{ .argv = &.{ exe, "render", "t.knap", "-d", "b.json" }, .want = "<h1>BBB</h1>\n" },
+        .{ .argv = &.{ exe, "render", "t.knap", "-d", "a.json" }, .want = "<h1 id=\"aaa\">AAA</h1>\n" },
+        .{ .argv = &.{ exe, "render", "t.knap", "-d", "b.json" }, .want = "<h1 id=\"bbb\">BBB</h1>\n" },
         .{ .argv = &.{ exe, "--version" }, .want = version },
     };
 

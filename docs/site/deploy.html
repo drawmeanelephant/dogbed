@@ -15,9 +15,9 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html" class="here">deploy</a></nav></div>
 <div class="layout">
-<h1>The publishing pipeline</h1>
+<h1 id="the-publishing-pipeline">The publishing pipeline</h1>
 <p>This page is part of the site it describes. The docs deploy to Cloudflare Pages, and this page documents the pipeline that ships them: edit Knap and JSON, rebuild with the tool, prove the committed output is current, merge, and Pages takes it from there. The tool documents its own deployment.</p>
-<h2>The loop</h2>
+<h2 id="the-loop">The loop</h2>
 <p>The whole loop: edit <code>docs/src/*.knap</code> or <code>docs/data/*.json</code>, rebuild the site, prove the committed output is current, ship it through a PR. On merge, the deploy workflow pushes <code>docs/site/</code> to Cloudflare Pages:</p>
 <pre><code>$ sh docs/build.sh
 rendered: index shell templates contract dogfood deploy
@@ -25,7 +25,7 @@ $ git diff --exit-code docs/site/ &amp;&amp; echo clean
 clean
 
 </code></pre>
-<h2>The reproducibility gate</h2>
+<h2 id="the-reproducibility-gate">The reproducibility gate</h2>
 <p>The gate is the <code>docs-repro</code> job in <code>.github/workflows/ci.yml</code>: it builds the dogbed binary, runs <code>sh docs/build.sh</code>, and fails with <code>git diff --exit-code docs/site/</code> if anything differs. A red build means exactly one thing — you forgot to rebuild the site before committing. Watch it fail on a stale tree:</p>
 <pre><code>$ echo stale &gt;&gt; docs/site/index.html
 $ git diff --exit-code docs/site/
@@ -42,9 +42,9 @@ $ echo &quot;exit: $?&quot;
 exit: 1
 
 </code></pre>
-<h2>Two hosts, one artifact</h2>
+<h2 id="two-hosts-one-artifact">Two hosts, one artifact</h2>
 <p>The same <code>docs/site/</code> tree ships to two hosts: Cloudflare Pages serves the canonical <a href="https://dogbed.filed.fyi">dogbed.filed.fyi</a> (and the default <a href="https://dogbed.pages.dev">dogbed.pages.dev</a>), and GitHub Pages mirrors it from the repo itself. One artifact, two deploy workflows, both triggered by a push to <code>main</code>.</p>
-<h2>The Cloudflare setup</h2>
+<h2 id="the-cloudflare-setup">The Cloudflare setup</h2>
 <p>The Cloudflare setup, as inspected: the project is <code>dogbed</code> — live at <a href="https://dogbed.filed.fyi">dogbed.filed.fyi</a> and on the default <a href="https://dogbed.pages.dev">dogbed.pages.dev</a> domain. The output directory is <code>docs/site/</code>, committed to the repo — the deploy ships the exact bytes in the tree, no build step on the Pages side. The deploy path is wrangler direct upload from GitHub Actions: the repo carries the two secrets below, and no Cloudflare GitHub App checks appear on commits, so the Pages integration path is not in play.</p>
 <pre><code>$ gh secret list --repo drawmeanelephant/dogbed
 CLOUDFLARE_ACCOUNT_ID	2026-09-30T00:10:25Z
@@ -70,7 +70,7 @@ jobs:
           command: pages deploy docs/site --project-name=dogbed
 
 </code></pre>
-<h2>The GitHub Pages setup</h2>
+<h2 id="the-github-pages-setup">The GitHub Pages setup</h2>
 <p>GitHub Pages serves the same bytes with source set to GitHub Actions — the workflow builds the tool, renders the site, and hands <code>docs/site/</code> to <code>actions/deploy-pages</code>:</p>
 <pre><code>$ cat .github/workflows/pages.yml
 name: pages
@@ -96,7 +96,7 @@ jobs:
       - id: deployment
         uses: actions/deploy-pages@v4
 </code></pre>
-<h2>Rollback</h2>
+<h2 id="rollback">Rollback</h2>
 <p>Cloudflare keeps every deployment. To roll back:</p>
 <ol>
 <li>open the Cloudflare dashboard, Workers &amp; Pages, project <code>dogbed</code></li>
@@ -105,7 +105,7 @@ jobs:
 </ol>
 <pre><code>$ npx wrangler pages deployment rollback &lt;deployment-id&gt; --project-name=dogbed
 </code></pre>
-<h2>The first deploy</h2>
+<h2 id="the-first-deploy">The first deploy</h2>
 <p>The deploy workflow first fired on the merge of the very PR that added it — push to <code>main</code>, 28 seconds, deployed. No build step, no ceremony: checkout and wrangler. The workflow log, trimmed to the wrangler action (timestamps are the runner's):</p>
 <pre><code>2026-09-30T00:28:04.4001917Z   command: pages deploy docs/site --project-name=dogbed
 2026-09-30T00:28:04.4906387Z [command]/usr/local/bin/npx --no-install wrangler --version

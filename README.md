@@ -20,7 +20,7 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 ```
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
               [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
-              [--max-output <bytes>]
+              [--wikilink-href <pattern>] [--max-output <bytes>]
 dogbed template <name>
 dogbed init
 dogbed --help
@@ -41,6 +41,10 @@ dogbed --version
 - `--lang <tag>` — set the document language on the shell's root element
   (`<html lang="…">`; XHTML also gets `xml:lang`). Emitted verbatim —
   pick a valid BCP 47 tag (`en`, `pt-BR`).
+- `--wikilink-href <pattern>` — href pattern for `[[wikilinks]]`:
+  `{slug}` is the target slugged lowercase-kebab, `{target}` the verbatim
+  target, and `[[page#heading]]` keeps `#heading-slug` after the pattern.
+  Default `{slug}.html`; the pattern must contain `{slug}` or `{target}`.
 - `--max-output, -m` — ceiling on the emitted document in bytes, shell
   included (`k`/`m`/`g` suffixes accepted). Default 256 MiB; `0` means no
   limit. Enforced while the document renders: every stage stops the moment
@@ -52,6 +56,14 @@ dogbed --version
 (`<h1>…</h1><p>…</p>`), ready to pipe into something bigger. Passing any
 shell flag (`--title`, `--css`, `--head`, `--lang`) finishes the job
 instead: the same fragment wrapped in a minimal HTML shell, nothing more.
+
+**Front matter:** a leading `---` YAML block is consumed as document
+metadata, never rendered — its `title` even supplies the shell `<title>`
+when `--title` isn't passed (a shell flag is still required). Obsidian
+extensions are on: callouts, footnotes, highlights, task lists and
+`[[wikilinks]]`, which resolve to page URLs through the `--wikilink-href`
+pattern. Headings get GFM-style `id` slugs, so `[[page#heading]]` links
+have a real anchor.
 
 On any error the message goes to stderr, stdout stays empty, exit code is 1.
 

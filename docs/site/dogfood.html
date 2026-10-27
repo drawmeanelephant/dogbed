@@ -15,19 +15,19 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html">extensions</a><a href="shell.html">shell</a><a href="dogfood.html" class="here">dogfood</a><a href="deploy.html">deploy</a></nav></div>
 <div class="layout">
-<h1>Dogfood: the tool builds its own docs</h1>
+<h1 id="dogfood-the-tool-builds-its-own-docs">Dogfood: the tool builds its own docs</h1>
 <p>These docs were built by the tool they document. Five Knap templates plus five JSON data files, rendered by <code>dogbed render</code> with <code>--title</code> and <code>--css</code> into static HTML by <code>docs/build.sh</code>. No site generator, no JavaScript — the docs build is as dumb as the tool.</p>
 <p>The rule on this site: every output block is real. Each one was produced by running the command shown with the <code>dogbed</code> binary on <code>main</code>, and the captured bytes were embedded into the page data with <code>jq</code> — nothing hand-typed, nothing invented.</p>
-<h2>PR #3, graded by its own tool</h2>
+<h2 id="pr-3-graded-by-its-own-tool">PR #3, graded by its own tool</h2>
 <p>The quality story, told with an artifact: the authoring agent reviewed its own PR #3 — the one that added the document shell and the starter library — with the tool it touches, and rendered the verdict through that tool. The owner review said approve and merge with the 8/8 smoke scenarios green; what follows is the tool grading its own homework. First, print the starter: <code>dogbed template verdict &gt; pr3.knap</code>. The data is that self-review:</p>
 <pre><code>{&quot;blockers&quot;:[],&quot;nits&quot;:[&quot;xmlns on the xhtml root element goes one line past the issue text — good call anyway&quot;,&quot;sample data avoids -- because Textile renders it as an em-dash&quot;,&quot;--max-output now covers the final document; README wording updated to match&quot;],&quot;summary&quot;:&quot;the shell stays a dumb string wrap, the library stays three starters; ship it&quot;,&quot;title&quot;:&quot;PR #3 — document shell + starter library&quot;,&quot;verdict&quot;:&quot;approve&quot;}
 
 </code></pre>
 <p>Render: <code>dogbed render pr3.knap -d pr3.json</code> —</p>
-<pre><code>&lt;h1&gt;PR #3 — document shell + starter library&lt;/h1&gt;
+<pre><code>&lt;h1 id=&quot;pr-3-document-shell-starter-library&quot;&gt;PR #3 — document shell + starter library&lt;/h1&gt;
 &lt;p&gt;&lt;strong&gt;approve&lt;/strong&gt; — the shell stays a dumb string wrap, the library stays three starters; ship it&lt;/p&gt;
-&lt;h2&gt;Blockers&lt;/h2&gt;
-&lt;h2&gt;Nits&lt;/h2&gt;
+&lt;h2 id=&quot;blockers&quot;&gt;Blockers&lt;/h2&gt;
+&lt;h2 id=&quot;nits&quot;&gt;Nits&lt;/h2&gt;
 &lt;ol&gt;
 &lt;li&gt;xmlns on the xhtml root element goes one line past the issue text — good call anyway&lt;/li&gt;
 &lt;li&gt;sample data avoids -- because Textile renders it as an em-dash&lt;/li&gt;
@@ -35,7 +35,7 @@
 &lt;/ol&gt;
 
 </code></pre>
-<h2>What running it surfaced</h2>
+<h2 id="what-running-it-surfaced">What running it surfaced</h2>
 <p>Re-rendering this site after the k4o upgrade surfaced genuine behaviors. First: block tags want their own lines — <code>{% endif %}{% if %}</code> back-to-back on one line eats the newline between the blocks, and the next heading lands inside the previous list item:</p>
 <pre><code>$ cat glue.knap
 {{ items | list }}
@@ -52,7 +52,7 @@ $ dogbed render glue.knap -d glue.json
 &lt;ul&gt;
 &lt;li&gt;a&lt;/li&gt;
 &lt;/ul&gt;
-&lt;h2&gt;Added&lt;/h2&gt;
+&lt;h2 id=&quot;added&quot;&gt;Added&lt;/h2&gt;
 &lt;ul&gt;
 &lt;li&gt;
 &lt;p&gt;b## Extra&lt;/p&gt;
@@ -75,7 +75,7 @@ $ echo '{&quot;u&quot;:&quot;https://e.com&quot;}' | dogbed render linkgood.knap
 &lt;p&gt;&lt;a href=&quot;https://e.com&quot;&gt;source&lt;/a&gt;&lt;/p&gt;
 
 </code></pre>
-<p>Third: the verdict starter has no <code>{% if %}</code> guard on its sections — with an empty <code>blockers</code> array the <code>Blockers</code> heading renders with nothing under it. Look at the output above: <code>&lt;h2&gt;Blockers&lt;/h2&gt;</code>, orphaned. The newer starters guard their sections; verdict predates them. The workaround is yours: omit or accept — the starter ships as is.</p>
+<p>Third: the verdict starter has no <code>{% if %}</code> guard on its sections — with an empty <code>blockers</code> array the <code>Blockers</code> heading renders with nothing under it. Look at the output above: <code>&lt;h2 id=&quot;blockers&quot;&gt;Blockers&lt;/h2&gt;</code>, orphaned. The newer starters guard their sections; verdict predates them. The workaround is yours: omit or accept — the starter ships as is.</p>
 <p>Fourth, the good-news finding: <code>code_block</code> emits a fenced Markdown block, and fences hold empty lines — a value containing blank lines stays one block now. The <code>···</code> markers the quickstart used to draw for the starter's blank lines are retired; real blank lines render verbatim:</p>
 <pre><code>$ printf '{&quot;src&quot;:&quot;line one\\n\\nline two&quot;}' | dogbed render block.knap -d -
 &lt;pre&gt;&lt;code&gt;line one

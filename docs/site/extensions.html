@@ -15,9 +15,9 @@
 <div class="top"><a class="brand" href="index.html">dog<span class="dog">bed</span></a>
 <nav><a href="index.html">home</a><a href="cli.html">cli</a><a href="templates.html">templates</a><a href="extensions.html" class="here">extensions</a><a href="shell.html">shell</a><a href="dogfood.html">dogfood</a><a href="deploy.html">deploy</a></nav></div>
 <div class="layout">
-<h1>Extensions</h1>
+<h1 id="extensions">Extensions</h1>
 <p>k4o renders Obsidian-flavored Markdown and oliver parses it natively — every extension filter lands as a real document node, not a literal marker. All demos on this page are the pipeline's own output.</p>
-<h2>Highlights and strike</h2>
+<h2 id="highlights-and-strike">Highlights and strike</h2>
 <p><code>highlight</code> wraps in <code>&lt;mark&gt;</code>, <code>strike</code> in <code>&lt;del&gt;</code> — colored highlights take a color name:</p>
 <pre><code>$ cat ex.knap
 {{ t | highlight }}
@@ -27,7 +27,7 @@ $ dogbed render ex.knap -d ex.json
 &lt;p&gt;&lt;mark&gt;ship it&lt;/mark&gt;&lt;/p&gt;
 &lt;p&gt;&lt;del&gt;do not ship it&lt;/del&gt;&lt;/p&gt;
 </code></pre>
-<h2>Math</h2>
+<h2 id="math">Math</h2>
 <p><code>math</code> and <code>math_block</code> emit TeX — inline <code>$…$</code>, display <code>$$…$$</code>. Oliver typesets nothing; the span is yours to hand to MathJax:</p>
 <pre><code>$ cat mx.knap
 {{ f | math }}
@@ -38,7 +38,7 @@ $ dogbed render mx.knap -d mx.json
 &lt;div class=&quot;math display&quot;&gt;x = (-b +- sqrt(b^2 - 4ac)) / 2a
 &lt;/div&gt;
 </code></pre>
-<h2>Callouts</h2>
+<h2 id="callouts">Callouts</h2>
 <p><code>callout</code> turns a value into an Obsidian callout — <code>&gt; [!type]</code> under the hood, a <code>callout-&lt;type&gt;</code> div on the page. Give each callout its own blank line:</p>
 <pre><code>$ cat co.knap
 {{ note | callout:&quot;note&quot; }}
@@ -52,7 +52,7 @@ $ dogbed render co.knap -d co.json
 &lt;p&gt;the href passes through verbatim&lt;/p&gt;
 &lt;/div&gt;
 </code></pre>
-<h2>Task lists and footnotes</h2>
+<h2 id="task-lists-and-footnotes">Task lists and footnotes</h2>
 <p><code>list:task</code> and <code>list:numbered-task</code> emit checkboxes — the list filter's four modes are <code>bullet</code>, <code>numbered</code>, <code>task</code>, <code>numbered-task</code>. Footnotes (<code>[^n]</code> + definitions) are on the same flag set:</p>
 <pre><code>$ cat tk.knap
 {{ items | list:task }}
@@ -62,18 +62,18 @@ $ dogbed render tk.knap -d tk.json
 &lt;li&gt;&lt;input type=&quot;checkbox&quot; disabled=&quot;&quot; /&gt;todo&lt;/li&gt;
 &lt;/ul&gt;
 </code></pre>
-<h2>Comments, wikilinks, embeds</h2>
-<p>The quiet ones: <code>comment</code> writes an invisible <code>%%…%%</code> note into the source (it never reaches the output — the empty first paragraph below is where it was), <code>wikilink</code> emits <code>[[page]]</code> (a link by default — a consumer-side resolver can rewrite the target), and <code>embed</code> emits <code>![[x]]</code> as a placeholder span until a resolver claims it:</p>
+<h2 id="comments-wikilinks-embeds">Comments, wikilinks, embeds</h2>
+<p>The quiet ones: <code>comment</code> writes an invisible <code>%%…%%</code> note into the source (it lands as an HTML comment in the output), <code>wikilink</code> emits <code>[[page]]</code> (resolved through the <code>--wikilink-href</code> pattern — <code>{slug}.html</code> by default), and <code>embed</code> emits <code>![[x]]</code> as a placeholder span until a resolver claims it:</p>
 <pre><code>$ cat mt.knap
 {{ c | comment }}
 {{ w | wikilink }}
 {{ e | embed }}
 $ dogbed render mt.knap -d mt.json
-&lt;p&gt;
-&lt;a href=&quot;Getting%20Started&quot;&gt;Getting Started&lt;/a&gt;
+&lt;!--note--&gt;
+&lt;p&gt;&lt;a href=&quot;getting-started.html&quot;&gt;Getting Started&lt;/a&gt;
 &lt;span class=&quot;embed&quot; data-embed-target=&quot;demo.knap&quot;&gt;demo.knap&lt;/span&gt;&lt;/p&gt;
 </code></pre>
-<h2>Plain text back</h2>
+<h2 id="plain-text-back">Plain text back</h2>
 <p>And the undo button: <code>escape_md</code> walks a value back to plain text — inline specials get backslash-escaped before Markdown sees them. For data you don't trust, escape first, format later:</p>
 <pre><code>$ cat esc.knap
 {{ t | escape_md }}

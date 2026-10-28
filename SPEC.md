@@ -52,7 +52,7 @@ The recurring job: structured findings in, consistent document out.
 
 - `dogbed render <template.knap> [--data <file>] [--profile html|xhtml]
   [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
-  [--wikilink-href <pattern>] [--max-output <bytes>]`
+  [--wikilink-href <pattern>] [--max-output <bytes>] [--escape]`
 - `--data -` reads the JSON object from stdin:
   `cat findings.json | dogbed render verdict.knap -d - > verdict.html`
 - Output is a bare HTML fragment unless `--title`, `--css`, `--head`, or
@@ -76,6 +76,24 @@ The recurring job: structured findings in, consistent document out.
   `acmedb-docs-backups.html`. A pattern with no `{slug}` or `{target}` is
   a usage error. Headings get GFM-style `id` slugs so the fragment half
   of a wikilink has a real anchor.
+- `--escape` is the opt-in sanitization mode for untrusted data: every
+  string in the JSON object — values and object keys — is HTML-escaped
+  (`& < > " '`) before k4o interpolates it, so caller-supplied markup
+  (`<script>`, `<img onerror=…>`) reaches the document as inert entities
+  instead of live HTML. Strings that are dangerous URL schemes
+  (`javascript:`, `vbscript:`, `data:` other than a bitmap
+  `data:image/…`) have their colon percent-encoded — entity escaping
+  can't help inside an href, but `javascript%3A…` is a relative
+  reference, not a handler. Escaping applies to the data itself, so
+  `{% if %}`/`{% set %}` expressions see escaped text, and an object key
+  containing HTML-special characters can no longer be addressed by name.
+  Trusted content opts out at the template level: everything between
+  `<!-- dogbed:raw -->` and `<!-- dogbed:endraw -->` markers is decoded
+  back to raw markup after the k4o stage (the markers are stripped, and
+  unclosed/nested/stray markers are render errors). A data value can't
+  forge the markers — its `<` bytes were escaped upstream — so the only
+  markers in the render are the template's own. Without `--escape` the
+  markers are ordinary HTML comments.
 - `--max-output` caps the final document in bytes, shell included (it also
   bounds the k4o stage; default 256 MiB, `0` = unlimited). Nested loops
   multiply, so the default is generous but finite. The cap is enforced as

@@ -292,6 +292,157 @@ test "render: callouts render as callout blocks, not plain blockquotes" {
     try std.testing.expect(std.mem.indexOf(u8, run.stdout, "[!warning]") == null);
 }
 
+// -- opt-in HTML escaping of interpolated data (issue #36) --
+
+test "render: --escape neutralizes markup and dangerous schemes in data (issue #36)" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "e.knap",
+        .data = "{{ bio }}\n\n[link]({{ url }})\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "e.json",
+        .data = "{\"bio\":\"<script>alert(1)</script> & \\\"friends\\\"\",\"url\":\"javascript:alert(1)\"}",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const plain = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "e.knap", "-d", "e.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, plain.term);
+    // Default stays verbatim: live markup, live javascript: href.
+    try std.testing.expect(std.mem.indexOf(u8, plain.stdout, "<script>alert(1)</script>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, plain.stdout, "href=\"javascript:alert(1)\"") != null);
+
+    const esc = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "e.knap", "-d", "e.json", "--escape" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, esc.term);
+    // Escaped: the script is inert text, and the scheme's colon is
+    // percent-encoded so the href is a relative reference, not a handler.
+    try std.testing.expect(std.mem.indexOf(u8, esc.stdout, "&lt;script&gt;alert(1)&lt;/script&gt;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, esc.stdout, "&quot;friends&quot;") != null);
+    try std.testing.expect(std.mem.indexOf(u8, esc.stdout, "<script>") == null);
+    try std.testing.expect(std.mem.indexOf(u8, esc.stdout, "javascript:") == null);
+    try std.testing.expect(std.mem.indexOf(u8, esc.stdout, "href=\"javascript%3Aalert(1)\"") != null);
+}
+
+test "render: --escape raw markers pass trusted data through unescaped" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "r.knap",
+        .data = "{{ bio }}\n\n<!-- dogbed:raw -->\n{{ trusted }}\n<!-- dogbed:endraw -->\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "r.json",
+        .data = "{\"bio\":\"<script>x</script>\",\"trusted\":\"<b>bold</b> &amp; stuff\"}",
+    });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "r.knap", "-d", "r.json", "--escape" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "&lt;script&gt;x&lt;/script&gt;") != null);
+    // The raw region restores the original string verbatim — entities and
+    // all — and the markers themselves are gone.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<b>bold</b> &amp; stuff") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "dogbed:raw") == null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "dogbed:endraw") == null);
+}
+
+test "render: an unclosed raw marker under --escape is a clean error" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "u.knap",
+        .data = "<!-- dogbed:raw -->\n{{ x }}\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "u.json", .data = "{\"x\":\"a\"}" });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "u.knap", "-d", "u.json", "--escape" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 1 }, run.term);
+    try std.testing.expectEqual(@as(usize, 0), run.stdout.len);
+    try std.testing.expect(std.mem.indexOf(u8, run.stderr, "without a matching <!-- dogbed:endraw -->") != null);
+}
+
+test "render: raw markers without --escape are ordinary comments" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    var tmp = std.testing.tmpDir(.{});
+    defer tmp.cleanup();
+    try tmp.dir.writeFile(std.testing.io, .{
+        .sub_path = "c.knap",
+        .data = "<!-- dogbed:raw -->\n{{ x }}\n<!-- dogbed:endraw -->\n",
+    });
+    try tmp.dir.writeFile(std.testing.io, .{ .sub_path = "c.json", .data = "{\"x\":\"<i>ok</i>\"}" });
+
+    const exe = try dogbedExe(alloc);
+    const run = try std.process.run(alloc, std.testing.io, .{
+        .argv = &.{ exe, "render", "c.knap", "-d", "c.json" },
+        .cwd = .{ .dir = tmp.dir },
+    });
+    try std.testing.expectEqual(std.process.Child.Term{ .exited = 0 }, run.term);
+    // No escaping pass → the value stays live markup and the markers ride
+    // through as plain HTML comments.
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<i>ok</i>") != null);
+    try std.testing.expect(std.mem.indexOf(u8, run.stdout, "<!-- dogbed:raw -->") != null);
+}
+
+test "escape: data sanitization and raw-region units" {
+    var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena_state.deinit();
+    const alloc = arena_state.allocator();
+
+    // escapeJsonStrings escapes strings recursively — values and keys —
+    // and neutralizes dangerous schemes while leaving safe URLs alone.
+    var root = try std.json.parseFromSliceLeaky(std.json.Value, alloc,
+        "{\"a<b>\":\"<b>x</b>\",\"arr\":[\"<u>\",\"javascript:alert(1)\"],\"img\":\"data:image/png;base64,xx\",\"link\":\"https://e.com/?a=1&b=2\",\"n\":1}",
+        .{});
+    try cli.escapeJsonStrings(alloc, &root);
+    const obj = root.object;
+    try std.testing.expectEqualStrings("&lt;b&gt;x&lt;/b&gt;", obj.get("a&lt;b&gt;").?.string);
+    try std.testing.expectEqualStrings("&lt;u&gt;", obj.get("arr").?.array.items[0].string);
+    try std.testing.expectEqualStrings("javascript%3Aalert(1)", obj.get("arr").?.array.items[1].string);
+    try std.testing.expectEqualStrings("data:image/png;base64,xx", obj.get("img").?.string);
+    try std.testing.expectEqualStrings("https://e.com/?a=1&amp;b=2", obj.get("link").?.string);
+    try std.testing.expectEqual(@as(i64, 1), obj.get("n").?.integer);
+
+    // unescapeRawRegions strips markers and decodes only the entities
+    // --escape produces; &amp;lt; restores to the literal text &lt;.
+    const out = try cli.unescapeRawRegions(alloc,
+        "a\n<!-- dogbed:raw -->\n&lt;b&gt;&amp;lt;&#39;q&#39;\n<!--dogbed:endraw-->\nc");
+    try std.testing.expectEqualStrings("a\n\n<b>&lt;'q'\n\nc", out);
+    // No markers → input returned untouched.
+    try std.testing.expectEqualStrings("plain &lt; text", try cli.unescapeRawRegions(alloc, "plain &lt; text"));
+    // Stray close / unclosed open are template errors.
+    try std.testing.expectError(error.StrayEndrawMarker, cli.unescapeRawRegions(alloc, "<!-- dogbed:endraw -->"));
+    try std.testing.expectError(error.UnclosedRawMarker, cli.unescapeRawRegions(alloc, "<!-- dogbed:raw -->x"));
+}
+
 test "wikilink: slug and href policy units" {
     var arena_state = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena_state.deinit();

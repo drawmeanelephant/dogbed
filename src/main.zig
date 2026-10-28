@@ -94,6 +94,22 @@ const usage_text =
     \\                      backups]] links to acmedb-docs-backups.html.
     \\                      Use "{target}" for oliver's stock
     \\                      pass-through behavior.
+    \\  --escape            Opt-in: HTML-escape every string in the JSON
+    \\                      data (values and object keys) before k4o
+    \\                      interpolates it, so caller-supplied markup —
+    \\                      <script>, <img onerror=…> — reaches the output
+    \\                      as inert text instead of live HTML. Strings that
+    \\                      are dangerous URL schemes (javascript:,
+    \\                      vbscript:, data: other than a bitmap
+    \\                      data:image/…) have their colon percent-encoded,
+    \\                      so they render as relative references rather
+    \\                      than live hrefs. Templates mark trusted
+    \\                      interpolations with the raw markers
+    \\                      <!-- dogbed:raw --> … <!-- dogbed:endraw -->:
+    \\                      the markers are stripped and the region's
+    \\                      escaped bytes decoded back to live markup
+    \\                      before the HTML stage. Without --escape the
+    \\                      markers are ordinary HTML comments.
     \\  --max-output, -m <bytes>
     \\                      Ceiling on the emitted document in bytes, shell
     \\                      included (it also bounds the intermediate Markdown
@@ -156,6 +172,7 @@ pub fn main(init: std.process.Init) !u8 {
     defer head.deinit(init.gpa);
     var lang: ?[]const u8 = null;
     var wikilink_href: ?[]const u8 = null;
+    var escape_data = false;
     var i: usize = 1;
     while (i < args.items.len) : (i += 1) {
         const arg = args.items[i];
@@ -245,6 +262,9 @@ pub fn main(init: std.process.Init) !u8 {
             if (wikilink_href != null) return usage(init, "duplicate --wikilink-href");
             if (!validWikilinkPattern(value)) return usage(init, "invalid value for --wikilink-href (expected a pattern containing {slug} or {target})");
             wikilink_href = value;
+        } else if (std.mem.eql(u8, arg, "--escape")) {
+            if (escape_data) return usage(init, "duplicate --escape");
+            escape_data = true;
         } else if (arg.len > 1 and arg[0] == '-') {
             return usage(init, "unknown option");
         } else {
@@ -287,13 +307,24 @@ pub fn main(init: std.process.Init) !u8 {
         }
     }
 
+    // --escape: every string in the JSON data (values and object keys) is
+    // HTML-escaped, and dangerous URL schemes neutralized, before k4o
+    // interpolates it — caller-supplied markup (<script>, <img onerror=…>,
+    // javascript: hrefs) reaches the document as inert text. Trusted
+    // values opt back out inside <!-- dogbed:raw --> …
+    // <!-- dogbed:endraw --> markers, decoded below in unescapeRawRegions.
+    if (escape_data) escapeJsonStrings(arena, &root) catch {
+        report("out of memory", .{});
+        return 1;
+    };
+
     // Stage 1: Knap template + data --k4o--> oliver-format Markdown. Plain
     // knap-faithful markdown writes table delimiters as `| - |`, which
     // oliver's `:?-+:?` grammar reads as a paragraph; the oliver format
     // widens them to `---` and is otherwise byte-identical except for
     // `comment`, which stays an HTML comment.
     var d = kt.Diagnostic{};
-    const source = kt.renderFormatWithLimit(arena, template, root, &d, .oliver, max_output) catch |e| switch (e) {
+    var source = kt.renderFormatWithLimit(arena, template, root, &d, .oliver, max_output) catch |e| switch (e) {
         error.Template => {
             report("template: {s}", .{if (d.message.len > 0) d.message else "template error"});
             return 1;
@@ -303,6 +334,33 @@ pub fn main(init: std.process.Init) !u8 {
             return 1;
         },
     };
+
+    // --escape raw opt-out: the template's <!-- dogbed:raw --> …
+    // <!-- dogbed:endraw --> regions have their escaped bytes decoded back
+    // to live markup, and the markers stripped, before oliver sees the
+    // Markdown. An attacker-controlled value can't forge markers — its
+    // `<` bytes were escaped upstream — so the only literal markers in the
+    // render are the template's own.
+    if (escape_data) {
+        source = unescapeRawRegions(arena, source) catch |e| switch (e) {
+            error.OutOfMemory => {
+                report("out of memory", .{});
+                return 1;
+            },
+            error.UnclosedRawMarker => {
+                report("template: <!-- dogbed:raw --> without a matching <!-- dogbed:endraw -->", .{});
+                return 1;
+            },
+            error.NestedRawMarker => {
+                report("template: nested <!-- dogbed:raw --> marker", .{});
+                return 1;
+            },
+            error.StrayEndrawMarker => {
+                report("template: <!-- dogbed:endraw --> without <!-- dogbed:raw -->", .{});
+                return 1;
+            },
+        };
+    }
 
     // Stage 2: Markdown --oliver--> HTML, with the Obsidian extensions on
     // so the k4o extension filters land as real nodes: highlights, math,
@@ -853,6 +911,236 @@ pub fn escapeHtml(alloc: std.mem.Allocator, text: []const u8) std.Io.Writer.Erro
     var buf = std.Io.Writer.Allocating.init(alloc);
     try escapeHtmlTo(&buf.writer, text);
     return buf.written();
+}
+
+// -- --escape data sanitization (issue #36) --
+
+/// `--escape` pre-pass: rewrites every string leaf in the JSON data so a
+/// `{{ value }}` interpolation reaches the Markdown stage as inert text —
+/// `& < > " '` become entities and dangerous URL schemes are neutralized
+/// (escapeDataString). Values inside nested arrays and objects are
+/// escaped recursively, which also covers k4o's compact-JSON
+/// serialization of container interpolations.
+///
+/// Object keys are escaped too — a serialized object emits them verbatim
+/// — so the map is rebuilt rather than mutated: an array-hash-map hashes
+/// the key bytes at insertion, and swapping a key in place would orphan
+/// the entry. The cost is that a key containing HTML-special characters
+/// can no longer be looked up by name (`{{ obj["a<b"] }}` misses); keys
+/// that do appear in lookups — alphanumerics — are unchanged.
+///
+/// Caveat for template authors: escaping applies to the data itself, so
+/// `{% if x == "<b>" %}` and `{% set %}` see the escaped text.
+pub fn escapeJsonStrings(alloc: std.mem.Allocator, v: *std.json.Value) error{OutOfMemory}!void {
+    switch (v.*) {
+        .string => |s| v.* = .{ .string = try escapeDataString(alloc, s) },
+        .array => |*arr| {
+            for (arr.items) |*item| try escapeJsonStrings(alloc, item);
+        },
+        .object => |*obj| {
+            var rebuilt: std.json.ObjectMap = .empty;
+            var it = obj.iterator();
+            while (it.next()) |e| {
+                try escapeJsonStrings(alloc, e.value_ptr);
+                const key = try escapeHtmlChars(alloc, e.key_ptr.*);
+                try rebuilt.put(alloc, key, e.value_ptr.*);
+            }
+            v.* = .{ .object = rebuilt };
+        },
+        else => {},
+    }
+}
+
+/// One data string under --escape: neutralize a dangerous URL scheme
+/// first (on the raw bytes — the colon isn't an escapable character),
+/// then HTML-escape.
+fn escapeDataString(alloc: std.mem.Allocator, s: []const u8) error{OutOfMemory}![]const u8 {
+    return escapeHtmlChars(alloc, try neutralizeScheme(alloc, s));
+}
+
+/// HTML-escapes `& < > " '` into a new string — the data-value variant of
+/// escapeHtmlTo, adding `'` so a value can't break out of single-quoted
+/// attributes inside template-authored raw HTML either.
+fn escapeHtmlChars(alloc: std.mem.Allocator, text: []const u8) error{OutOfMemory}![]const u8 {
+    var out = std.ArrayList(u8).empty;
+    for (text) |c| {
+        switch (c) {
+            '&' => try out.appendSlice(alloc, "&amp;"),
+            '<' => try out.appendSlice(alloc, "&lt;"),
+            '>' => try out.appendSlice(alloc, "&gt;"),
+            '"' => try out.appendSlice(alloc, "&quot;"),
+            '\'' => try out.appendSlice(alloc, "&#39;"),
+            else => try out.append(alloc, c),
+        }
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// A `javascript:`, `vbscript:`, or `data:` URL (other than a bitmap
+/// `data:image/…`) in a data value would flow straight into a Markdown
+/// link destination and out again as a live href — entity escaping can't
+/// help because `:` isn't an escapable character and entities decode
+/// inside hrefs anyway. The fix is to percent-encode the colon itself:
+/// `javascript%3Aalert(1)` has no scheme, so the renderer treats it as a
+/// relative reference.
+///
+/// Scheme detection skips ASCII whitespace and control bytes, which
+/// browsers strip before parsing the scheme (`java\tscript:` is still
+/// javascript:). Anything without a `:` scheme — relative paths, plain
+/// text, `https:` links — returns unchanged.
+fn neutralizeScheme(alloc: std.mem.Allocator, s: []const u8) error{OutOfMemory}![]const u8 {
+    var scheme_buf: [16]u8 = undefined;
+    var n: usize = 0;
+    var i: usize = 0;
+    const colon: usize = while (i < s.len) : (i += 1) {
+        const c = s[i];
+        if (c == ':') break i;
+        if (c <= 0x20 or c == 0x7f) continue;
+        // A URL scheme is ALPHA *(ALPHA / DIGIT / "+" / "-" / ".") —
+        // anything else before the colon means this isn't a scheme.
+        if (!std.ascii.isAlphanumeric(c) and c != '+' and c != '-' and c != '.') return s;
+        if (n == scheme_buf.len) return s;
+        scheme_buf[n] = std.ascii.toLower(c);
+        n += 1;
+    } else return s;
+    const scheme = scheme_buf[0..n];
+    const dangerous = std.mem.eql(u8, scheme, "javascript") or
+        std.mem.eql(u8, scheme, "vbscript") or
+        (std.mem.eql(u8, scheme, "data") and !isSafeDataImage(s[colon + 1 ..]));
+    if (!dangerous) return s;
+    return std.fmt.allocPrint(alloc, "{s}%3A{s}", .{ s[0..colon], s[colon + 1 ..] });
+}
+
+/// `data:image/<bitmap>` data URIs are legitimate document content
+/// (embedded images); `data:text/html`, `data:image/svg+xml`, and
+/// everything else are scriptable and stay neutralized.
+fn isSafeDataImage(rest: []const u8) bool {
+    const safe_types = [_][]const u8{
+        "image/png", "image/jpeg", "image/gif", "image/webp",
+        "image/avif", "image/bmp", "image/x-icon", "image/vnd.microsoft.icon",
+    };
+    var i: usize = 0;
+    while (i < rest.len and (rest[i] <= 0x20 or rest[i] == 0x7f)) i += 1;
+    var buf: [64]u8 = undefined;
+    const n = @min(rest.len - i, buf.len);
+    const lower = std.ascii.lowerString(buf[0..n], rest[i..][0..n]);
+    for (safe_types) |t| {
+        if (std.mem.startsWith(u8, lower, t)) return true;
+    }
+    return false;
+}
+
+/// The template-side opt-out under --escape: everything between
+/// `<!-- dogbed:raw -->` and `<!-- dogbed:endraw -->` has its entities
+/// decoded back to raw markup before the Markdown stage hands off to
+/// oliver, so a trusted interpolation lands as real HTML. Only the
+/// entities --escape produces are decoded — a literal `&lt;` in the data
+/// round-trips back to `&lt;` text, not `<`.
+const raw_open_word = "dogbed:raw";
+const raw_close_word = "dogbed:endraw";
+
+const RawMarker = struct { end: usize, close: bool };
+
+/// Matches `<!-- dogbed:raw -->` / `<!-- dogbed:endraw -->` at `i`
+/// (interior spaces optional). Returns where the marker ends and which
+/// kind it is, or null.
+fn rawMarkerAt(src: []const u8, i: usize) ?RawMarker {
+    if (!std.mem.startsWith(u8, src[i..], "<!--")) return null;
+    var j = i + "<!--".len;
+    while (j < src.len and src[j] == ' ') j += 1;
+    var close = false;
+    if (std.mem.startsWith(u8, src[j..], raw_open_word)) {
+        j += raw_open_word.len;
+    } else if (std.mem.startsWith(u8, src[j..], raw_close_word)) {
+        j += raw_close_word.len;
+        close = true;
+    } else {
+        return null;
+    }
+    while (j < src.len and src[j] == ' ') j += 1;
+    if (!std.mem.startsWith(u8, src[j..], "-->")) return null;
+    return .{ .end = j + "-->".len, .close = close };
+}
+
+/// Strips raw markers from the rendered Markdown and decodes the escaped
+/// bytes inside each region. Markers are matched on the literal
+/// `<!-- … -->` bytes — impossible to forge from data under --escape,
+/// whose `<`/`&` are already entities — so only the template's own
+/// markers exist at this point. Unclosed, nested, or stray markers are
+/// template errors, reported like k4o's own.
+pub fn unescapeRawRegions(
+    alloc: std.mem.Allocator,
+    source: []const u8,
+) error{ UnclosedRawMarker, NestedRawMarker, StrayEndrawMarker, OutOfMemory }![]const u8 {
+    if (std.mem.indexOf(u8, source, "<!--") == null) return source;
+    var out = std.ArrayList(u8).empty;
+    var i: usize = 0;
+    while (i < source.len) {
+        const m = rawMarkerAt(source, i) orelse {
+            try out.append(alloc, source[i]);
+            i += 1;
+            continue;
+        };
+        if (m.close) return error.StrayEndrawMarker;
+        const body_start = m.end;
+        var j = body_start;
+        var body_end: usize = 0;
+        var close_end: usize = 0;
+        var found = false;
+        while (j < source.len) : (j += 1) {
+            if (rawMarkerAt(source, j)) |m2| {
+                if (!m2.close) return error.NestedRawMarker;
+                body_end = j;
+                close_end = m2.end;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return error.UnclosedRawMarker;
+        try unescapeHtmlEntities(alloc, source[body_start..body_end], &out);
+        i = close_end;
+    }
+    return out.toOwnedSlice(alloc);
+}
+
+/// Decodes the entities escapeHtmlChars produces — `&lt;` `&gt;` `&quot;`
+/// `&#39;` `&amp;` — into `out`. Single left-to-right pass, so
+/// `&amp;lt;` decodes to the text `&lt;` (the `&amp;` consumed at its `&`
+/// is never rescanned), which is the correct verbatim restore.
+fn unescapeHtmlEntities(alloc: std.mem.Allocator, text: []const u8, out: *std.ArrayList(u8)) error{OutOfMemory}!void {
+    var i: usize = 0;
+    while (i < text.len) {
+        const rest = text[i..];
+        if (rest[0] == '&') {
+            if (std.mem.startsWith(u8, rest, "&lt;")) {
+                try out.append(alloc, '<');
+                i += "&lt;".len;
+                continue;
+            }
+            if (std.mem.startsWith(u8, rest, "&gt;")) {
+                try out.append(alloc, '>');
+                i += "&gt;".len;
+                continue;
+            }
+            if (std.mem.startsWith(u8, rest, "&quot;")) {
+                try out.append(alloc, '"');
+                i += "&quot;".len;
+                continue;
+            }
+            if (std.mem.startsWith(u8, rest, "&#39;")) {
+                try out.append(alloc, '\'');
+                i += "&#39;".len;
+                continue;
+            }
+            if (std.mem.startsWith(u8, rest, "&amp;")) {
+                try out.append(alloc, '&');
+                i += "&amp;".len;
+                continue;
+            }
+        }
+        try out.append(alloc, rest[0]);
+        i += 1;
+    }
 }
 
 /// A `std.Io.Writer.Allocating` twin whose total output is capped at

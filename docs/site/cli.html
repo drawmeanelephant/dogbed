@@ -34,6 +34,7 @@
 <li><code>--lang &lt;tag&gt;</code> — <code>lang</code> on the root element (<code>xml:lang</code> too under XHTML). Verbatim — pick a real BCP 47 tag.</li>
 <li><code>--wikilink-href &lt;pattern&gt;</code> — href pattern for <code>[[wikilinks]]</code>: <code>{slug}</code> is the target slugged lowercase-kebab, <code>{target}</code> the verbatim target. Default <code>{slug}.html</code>.</li>
 <li><code>--max-output, -m &lt;bytes&gt;</code> — ceiling on the emitted document, shell included (<code>k</code>/<code>m</code>/<code>g</code> suffixes). Default 256 MiB, <code>0</code> = unlimited. Enforced as bytes are written — over-limit output never exists.</li>
+<li><code>--escape</code> — opt-in sanitization for untrusted data: HTML-escape every string in the JSON object before interpolation, and percent-encode dangerous URL schemes (<code>javascript:</code>, <code>vbscript:</code>, non-image <code>data:</code>). <code>&lt;!-- dogbed:raw --&gt;</code> … <code>&lt;!-- dogbed:endraw --&gt;</code> marks trusted interpolations that pass through unescaped.</li>
 </ul>
 <h2 id="exit-contract">Exit contract</h2>
 <p>Any of <code>--title</code>, <code>--css</code>, <code>--head</code>, <code>--lang</code> switches output from a bare fragment to a full document. With none, the fragment is byte-identical to a bare oliver render:</p>

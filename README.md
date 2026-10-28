@@ -20,7 +20,7 @@ One static binary, no runtime, no JavaScript, no database, no edit button.
 ```
 dogbed render <template.knap> [--data <data.json>] [--profile html|xhtml]
               [--title <text>] [--css <href>] [--head <html>] [--lang <tag>]
-              [--wikilink-href <pattern>] [--max-output <bytes>]
+              [--wikilink-href <pattern>] [--max-output <bytes>] [--escape]
 dogbed template <name>
 dogbed init
 dogbed --help
@@ -45,6 +45,14 @@ dogbed --version
   `{slug}` is the target slugged lowercase-kebab, `{target}` the verbatim
   target, and `[[page#heading]]` keeps `#heading-slug` after the pattern.
   Default `{slug}.html`; the pattern must contain `{slug}` or `{target}`.
+- `--escape` — opt-in sanitization for untrusted data: HTML-escape every
+  string in the JSON object before interpolation, so caller-supplied
+  markup (`<script>`, `<img onerror=…>`) lands as inert text. Dangerous
+  URL schemes (`javascript:`, `vbscript:`, non-image `data:`) have their
+  colon percent-encoded into a relative reference. Templates mark trusted
+  interpolations with `<!-- dogbed:raw -->` … `<!-- dogbed:endraw -->`,
+  which decode the region's escaped bytes back to live markup; without
+  `--escape` the markers are ordinary comments.
 - `--max-output, -m` — ceiling on the emitted document in bytes, shell
   included (`k`/`m`/`g` suffixes accepted). Default 256 MiB; `0` means no
   limit. Enforced while the document renders: every stage stops the moment
